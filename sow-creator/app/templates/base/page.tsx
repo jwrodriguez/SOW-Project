@@ -1,10 +1,14 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { TemplateGrid } from "@/components/template-grid";
 import { TemplateList } from "@/components/template-list";
-import { TemplateFilters, type SortOption } from "@/components/template-filters";
+import {
+  TemplateFilters,
+  type SortOption,
+} from "@/components/template-filters";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
@@ -117,14 +121,14 @@ export default function BaseTemplatesPage() {
           t.name.toLowerCase().includes(query) ||
           t.description?.toLowerCase().includes(query) ||
           t.owner.name.toLowerCase().includes(query) ||
-          t.tags?.some((tag) => tag.toLowerCase().includes(query))
+          t.tags?.some((tag) => tag.toLowerCase().includes(query)),
       );
     }
 
     // Filter by selected tags
     if (selectedTags.length > 0) {
       result = result.filter((t) =>
-        selectedTags.some((tag) => t.tags?.includes(tag))
+        selectedTags.some((tag) => t.tags?.includes(tag)),
       );
     }
 
@@ -155,10 +159,12 @@ export default function BaseTemplatesPage() {
             Pre-approved SOW templates for common service types.
           </p>
         </div>
-        <Button>
-          <Plus className="mr-1 h-4 w-4" />
-          New Template
-        </Button>
+        <Link href="/edit">
+          <Button>
+            <Plus className="mr-1 h-4 w-4" />
+            New Template
+          </Button>
+        </Link>
       </div>
 
       <TemplateFilters
@@ -183,4 +189,3 @@ export default function BaseTemplatesPage() {
     </div>
   );
 }
-
