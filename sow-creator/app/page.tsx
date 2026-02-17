@@ -124,9 +124,11 @@ export default function Page() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Button variant="outline" className="w-full">
-                  Create New
-                </Button>
+                <Link href="/new">
+                  <Button variant="outline" className="w-full">
+                    Create New
+                  </Button>
+                </Link>
               </CardContent>
             </Card>
           </div>

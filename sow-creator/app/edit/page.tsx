@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useMemo, useState } from "react";
+import { useSearchParams } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -258,35 +259,75 @@ function generateTOCEntries(sections: SectionNode[], depth = 0, startPage = 2): 
 
 // ============= MAIN COMPONENT =============
 export default function SowEditPage() {
-  const defaultData: TemplateData = useMemo(() => ({
-    documentName: "Untitled Document",
-    coverPage: {
-      title: "Statement of Work", projectNumber: "SOW-2026-001", clientName: "Product Name",
-      building: "3001", location: "Norman, Oklahoma", preparedBy: "Your Name",
-      department: "Department Name", date: new Date().toISOString().split("T")[0],
-      version: "1.0", confidentiality: "Confidential",
-    },
-    headerFooter: {
-      headerLeft: "Statement of Work\n3 February 2025", headerCenter: "", headerRight: "",
-      footerLeft: "SOW-2026-001", footerCenter: "", footerRight: "Page {PAGE}",
-      showPageNumbers: true, pageNumberPosition: "footer-right",
-    },
-    sections: [
-      { id: "sec-1", number: "1.0", title: "Project Overview", content: "This Statement of Work (SOW) outlines the scope, deliverables, and requirements for the engagement.", tables: [],
-        children: [
-          { id: "sec-1-1", number: "1.1", title: "Background", content: "Background information goes here...", tables: [], children: [] },
-          { id: "sec-1-2", number: "1.2", title: "Objectives", content: "The primary objectives of this engagement...", tables: [], children: [] },
-        ]
+  const searchParams = useSearchParams();
+
+  const defaultData: TemplateData = useMemo(() => {
+    // Base defaults
+    const base: TemplateData = {
+      documentName: "Untitled Document",
+      coverPage: {
+        title: "Statement of Work", projectNumber: "SOW-2026-001", clientName: "Product Name",
+        building: "3001", location: "Norman, Oklahoma", preparedBy: "Your Name",
+        department: "Department Name", date: new Date().toISOString().split("T")[0],
+        version: "1.0", confidentiality: "Confidential",
       },
-      { id: "sec-2", number: "2.0", title: "Scope of Work", content: "This section defines the detailed scope of work to be performed.", tables: [],
-        children: [
-          { id: "sec-2-1", number: "2.1", title: "In Scope", content: "Items included within the scope of this engagement...", tables: [], children: [] },
-          { id: "sec-2-2", number: "2.2", title: "Out of Scope", content: "Items not explicitly mentioned are considered out of scope.", tables: [], children: [] },
-        ]
+      headerFooter: {
+        headerLeft: "Statement of Work\n3 February 2025", headerCenter: "", headerRight: "",
+        footerLeft: "SOW-2026-001", footerCenter: "", footerRight: "Page {PAGE}",
+        showPageNumbers: true, pageNumberPosition: "footer-right",
       },
-      { id: "sec-3", number: "3.0", title: "Deliverables", content: "The following deliverables will be provided as part of this engagement.", tables: [], children: [] },
-    ],
-  }), []);
+      sections: [
+        { id: "sec-1", number: "1.0", title: "Project Overview", content: "This Statement of Work (SOW) outlines the scope, deliverables, and requirements for the engagement.", tables: [],
+          children: [
+            { id: "sec-1-1", number: "1.1", title: "Background", content: "Background information goes here...", tables: [], children: [] },
+            { id: "sec-1-2", number: "1.2", title: "Objectives", content: "The primary objectives of this engagement...", tables: [], children: [] },
+          ]
+        },
+        { id: "sec-2", number: "2.0", title: "Scope of Work", content: "This section defines the detailed scope of work to be performed.", tables: [],
+          children: [
+            { id: "sec-2-1", number: "2.1", title: "In Scope", content: "Items included within the scope of this engagement...", tables: [], children: [] },
+            { id: "sec-2-2", number: "2.2", title: "Out of Scope", content: "Items not explicitly mentioned are considered out of scope.", tables: [], children: [] },
+          ]
+        },
+        { id: "sec-3", number: "3.0", title: "Deliverables", content: "The following deliverables will be provided as part of this engagement.", tables: [], children: [] },
+      ],
+    };
+
+    // Override with setup data from the /new page if present
+    const setupParam = searchParams.get("setup");
+    if (setupParam) {
+      try {
+        const setup = JSON.parse(atob(setupParam));
+        if (setup.documentName) base.documentName = setup.documentName;
+        if (setup.title) base.coverPage.title = setup.title;
+        if (setup.projectNumber) {
+          base.coverPage.projectNumber = setup.projectNumber;
+          base.headerFooter.footerLeft = setup.projectNumber;
+        }
+        if (setup.clientName) base.coverPage.clientName = setup.clientName;
+        if (setup.building) base.coverPage.building = setup.building;
+        if (setup.location) base.coverPage.location = setup.location;
+        if (setup.preparedBy) base.coverPage.preparedBy = setup.preparedBy;
+        if (setup.department) base.coverPage.department = setup.department;
+        if (setup.date) {
+          base.coverPage.date = setup.date;
+          // Format for header
+          const d = new Date(setup.date + "T00:00:00");
+          const formatted = d.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" });
+          base.headerFooter.headerLeft = `${setup.title || "Statement of Work"}\n${formatted}`;
+        }
+        if (setup.confidentiality) base.coverPage.confidentiality = setup.confidentiality;
+        // Description seeds the first section's content if provided
+        if (setup.description) {
+          base.sections[0].content = setup.description;
+        }
+      } catch {
+        // If decode fails, just use defaults
+      }
+    }
+
+    return base;
+  }, [searchParams]);
 
   const [data, setData] = useState<TemplateData>(defaultData);
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(defaultData.sections.map(s => s.id)));
