@@ -124,3 +124,82 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ── Editor Ribbon (frosted glass) ── */
+.editor-ribbon {
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  background: rgba(255, 255, 255, 0.78);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+.dark .editor-ribbon {
+  background: rgba(30, 30, 30, 0.78);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+/* ── Blank Chips (inline fillable slot pills) ── */
+.blank-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 8px;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  line-height: 1.4;
+  cursor: pointer;
+  border: 1px solid transparent;
+  transition: all 0.15s ease;
+  vertical-align: baseline;
+}
+.blank-chip:hover {
+  filter: brightness(0.95);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
+}
+.blank-chip[data-type="text"]      { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+.blank-chip[data-type="number"]    { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+.blank-chip[data-type="word"]      { background: #e0e7ff; color: #3730a3; border-color: #a5b4fc; }
+.blank-chip[data-type="sentence"]  { background: #ede9fe; color: #5b21b6; border-color: #c4b5fd; }
+.blank-chip[data-type="paragraph"] { background: #fce7f3; color: #9d174d; border-color: #f9a8d4; }
+.blank-chip[data-type="list"]      { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
+.blank-chip[data-type="date"]      { background: #ffedd5; color: #9a3412; border-color: #fdba74; }
+
+/* ── Locked Section Indicator ── */
+.locked-overlay {
+  position: relative;
+}
+.locked-overlay::after {
+  content: "";
+  position: absolute;
+  inset: -4px -6px;
+  border-radius: 6px;
+  border: 1.5px dashed rgba(100, 116, 139, 0.3);
+  pointer-events: none;
+}
+
+/* ── Drag Handle ── */
+.drag-handle {
+  cursor: grab;
+  touch-action: none;
+  color: #94a3b8;
+  transition: color 0.15s;
+}
+.drag-handle:hover {
+  color: #475569;
+}
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+/* ── Ribbon divider ── */
+.ribbon-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 4px 0;
+  background: rgba(0, 0, 0, 0.1);
+}
+.dark .ribbon-divider {
+  background: rgba(255, 255, 255, 0.1);
+}
