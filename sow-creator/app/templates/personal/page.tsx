@@ -2,57 +2,25 @@
 
 import * as React from "react";
 import { useSession } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
 import { TemplateGrid } from "@/components/template-grid";
 import { TemplateList } from "@/components/template-list";
 import { TemplateFilters, type SortOption } from "@/components/template-filters";
 import { useViewMode } from "@/hooks/use-view-mode";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import { mockTemplates } from "@/lib/mock-templates";
 import type { Template } from "@/components/template-card";
 
-// Mock data - in real implementation, this would be filtered from the database
-// to only show templates where ownerId matches the current user
-const mockMyTemplates: Template[] = [
-  {
-    id: "1",
-    name: "Standard HVAC Maintenance",
-    description:
-      "Template for heating, ventilation, and air conditioning maintenance contracts with annual inspection schedules.",
-    tags: ["HVAC", "Maintenance", "Facilities"],
-    icon: "wrench" as const,
-    color: "orange" as const,
-    owner: { id: "current-user", name: "You" },
-    isShared: true,
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2),
-  },
-  {
-    id: "2",
-    name: "IT Support Services",
-    description:
-      "Comprehensive IT support and maintenance agreement template including SLAs and response times.",
-    tags: ["IT", "Support", "SLA"],
-    icon: "monitor" as const,
-    color: "blue" as const,
-    owner: { id: "current-user", name: "You" },
-    isShared: false,
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5),
-  },
-  {
-    id: "6",
-    name: "Vehicle Fleet Maintenance",
-    description:
-      "Government vehicle fleet maintenance and repair services contract.",
-    tags: ["Fleet", "Vehicles", "Maintenance"],
-    icon: "truck" as const,
-    color: "amber" as const,
-    owner: { id: "current-user", name: "You" },
-    isShared: false,
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 1),
-  },
-];
+// In the real implementation this filters to only templates owned by the
+// current user. For now we simulate that by filtering mock data to a subset.
+const mockMyTemplates = mockTemplates.filter((t) =>
+  ["1", "2", "6"].includes(t.id)
+);
 
 export default function PersonalTemplatesPage() {
   const { data: sessionData } = useSession();
+  const router = useRouter();
   const { viewMode, setViewMode } = useViewMode();
   const [searchQuery, setSearchQuery] = React.useState("");
   const [sortBy, setSortBy] = React.useState<SortOption>("date");
@@ -101,6 +69,17 @@ export default function PersonalTemplatesPage() {
     return result;
   }, [searchQuery, sortBy, selectedTags]);
 
+  // PROTOTYPE: In production this would fetch the template JSON by ID from the
+  // database and pass it to the editor. For now we navigate to /edit and the
+  // editor loads its default placeholder document.
+  function handleUseTemplate(template: Template) {
+    router.push(`/edit?template=${template.id}`);
+  }
+
+  function handleEditTemplate(template: Template) {
+    router.push(`/edit?template=${template.id}`);
+  }
+
   const ViewComponent = viewMode === "grid" ? TemplateGrid : TemplateList;
 
   return (
@@ -112,7 +91,7 @@ export default function PersonalTemplatesPage() {
             Templates you&apos;ve created and own.
           </p>
         </div>
-        <Button>
+        <Button onClick={() => router.push("/new")}>
           <Plus className="mr-1 h-4 w-4" />
           New Template
         </Button>
@@ -136,6 +115,8 @@ export default function PersonalTemplatesPage() {
         currentUserId={sessionData?.user?.id ?? "current-user"}
         emptyMessage="No templates yet"
         emptyDescription="Create your first template to start building your library."
+        onUse={handleUseTemplate}
+        onEdit={handleEditTemplate}
       />
     </div>
   );

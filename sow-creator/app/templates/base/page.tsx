@@ -3,6 +3,7 @@
 import * as React from "react";
 import Link from "next/link";
 import { useSession } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
 import { TemplateGrid } from "@/components/template-grid";
 import { TemplateList } from "@/components/template-list";
 import {
@@ -12,85 +13,12 @@ import {
 import { useViewMode } from "@/hooks/use-view-mode";
 import { Button } from "@/components/ui/button";
 import { Plus } from "lucide-react";
+import { mockTemplates } from "@/lib/mock-templates";
 import type { Template } from "@/components/template-card";
-
-// Mock data for demonstration
-const mockTemplates: Template[] = [
-  {
-    id: "1",
-    name: "Standard HVAC Maintenance",
-    description:
-      "Template for heating, ventilation, and air conditioning maintenance contracts with annual inspection schedules.",
-    tags: ["HVAC", "Maintenance", "Facilities"],
-    icon: "wrench" as const,
-    color: "orange" as const,
-    owner: { id: "user-1", name: "John Smith" },
-    isShared: true,
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2), // 2 days ago
-  },
-  {
-    id: "2",
-    name: "IT Support Services",
-    description:
-      "Comprehensive IT support and maintenance agreement template including SLAs and response times.",
-    tags: ["IT", "Support", "SLA"],
-    icon: "monitor" as const,
-    color: "blue" as const,
-    owner: { id: "user-1", name: "John Smith" },
-    isShared: false,
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 5), // 5 days ago
-  },
-  {
-    id: "3",
-    name: "Facilities Management",
-    description:
-      "Building facilities management and janitorial services contract template.",
-    tags: ["Facilities", "Janitorial", "Maintenance"],
-    icon: "building" as const,
-    color: "purple" as const,
-    owner: { id: "user-2", name: "Jane Doe" },
-    isShared: true,
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10), // 10 days ago
-  },
-  {
-    id: "4",
-    name: "Security Services Agreement",
-    description:
-      "Physical security and access control services statement of work template.",
-    tags: ["Security", "Access Control"],
-    icon: "shield" as const,
-    color: "red" as const,
-    owner: { id: "user-2", name: "Jane Doe" },
-    isShared: false,
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 2), // 2 hours ago
-  },
-  {
-    id: "5",
-    name: "Grounds Maintenance",
-    description: "Landscaping and grounds maintenance services template.",
-    tags: ["Landscaping", "Maintenance", "Grounds"],
-    icon: "leaf" as const,
-    color: "green" as const,
-    owner: { id: "user-3", name: "Mike Johnson" },
-    isShared: true,
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 30), // 30 days ago
-  },
-  {
-    id: "6",
-    name: "Vehicle Fleet Maintenance",
-    description:
-      "Government vehicle fleet maintenance and repair services contract.",
-    tags: ["Fleet", "Vehicles", "Maintenance"],
-    icon: "truck" as const,
-    color: "amber" as const,
-    owner: { id: "user-1", name: "John Smith" },
-    isShared: false,
-    updatedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 1), // 1 day ago
-  },
-];
 
 export default function BaseTemplatesPage() {
   const { data: sessionData } = useSession();
+  const router = useRouter();
   const { viewMode, setViewMode } = useViewMode();
   const [searchQuery, setSearchQuery] = React.useState("");
   const [sortBy, setSortBy] = React.useState<SortOption>("date");
@@ -104,16 +32,13 @@ export default function BaseTemplatesPage() {
   }, []);
 
   React.useEffect(() => {
-    // Simulate loading
     const timer = setTimeout(() => setIsLoading(false), 500);
     return () => clearTimeout(timer);
   }, []);
 
-  // Filter and sort templates
   const filteredTemplates = React.useMemo(() => {
     let result = [...mockTemplates];
 
-    // Filter by search query
     if (searchQuery) {
       const query = searchQuery.toLowerCase();
       result = result.filter(
@@ -125,14 +50,12 @@ export default function BaseTemplatesPage() {
       );
     }
 
-    // Filter by selected tags
     if (selectedTags.length > 0) {
       result = result.filter((t) =>
         selectedTags.some((tag) => t.tags?.includes(tag)),
       );
     }
 
-    // Sort
     result.sort((a, b) => {
       switch (sortBy) {
         case "name":
@@ -148,6 +71,17 @@ export default function BaseTemplatesPage() {
     return result;
   }, [searchQuery, sortBy, selectedTags]);
 
+  // PROTOTYPE: In production this would fetch the template JSON by ID from the
+  // database and pass it to the editor. For now we navigate to /edit and the
+  // editor loads its default placeholder document.
+  function handleUseTemplate(template: Template) {
+    router.push(`/edit?template=${template.id}`);
+  }
+
+  function handleEditTemplate(template: Template) {
+    router.push(`/edit?template=${template.id}`);
+  }
+
   const ViewComponent = viewMode === "grid" ? TemplateGrid : TemplateList;
 
   return (
@@ -159,12 +93,10 @@ export default function BaseTemplatesPage() {
             Pre-approved SOW templates for common service types.
           </p>
         </div>
-        <Link href="/edit">
-          <Button>
-            <Plus className="mr-1 h-4 w-4" />
-            New Template
-          </Button>
-        </Link>
+        <Button onClick={() => router.push("/new")}>
+          <Plus className="mr-1 h-4 w-4" />
+          New Template
+        </Button>
       </div>
 
       <TemplateFilters
@@ -185,6 +117,8 @@ export default function BaseTemplatesPage() {
         currentUserId={sessionData?.user?.id}
         emptyMessage="No templates found"
         emptyDescription="Try adjusting your search or create a new template."
+        onUse={handleUseTemplate}
+        onEdit={handleEditTemplate}
       />
     </div>
   );
