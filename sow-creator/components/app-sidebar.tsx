@@ -8,7 +8,7 @@ import {
   Send,
   LayoutTemplate,
   ShieldCheck,
-  FileText,
+  LayoutDashboard,
 } from "lucide-react";
 
 import { NavMain } from "@/components/nav-main";
@@ -28,15 +28,11 @@ import { Skeleton } from "@/components/ui/skeleton";
 const navData = {
   navMain: [
     {
-      title: "SOW Management",
-      url: "/sows",
-      icon: FileText,
+      title: "Dashboard",
+      url: "/",
+      icon: LayoutDashboard,
       isActive: true,
-      items: [
-        { title: "Active Drafts", url: "/sows/active" },
-        { title: "Review Queue", url: "/sows/review" },
-        { title: "Archive", url: "/sows/archive" },
-      ],
+      items: [],
     },
     {
       title: "Templates",

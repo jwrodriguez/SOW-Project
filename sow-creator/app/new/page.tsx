@@ -38,9 +38,9 @@ import {
   Hash,
   FileText,
   ShieldCheck,
+  Info,
 } from "lucide-react";
 
-// Generate a default project number based on current date
 function generateProjectNumber() {
   const now = new Date();
   const year = now.getFullYear();
@@ -48,10 +48,51 @@ function generateProjectNumber() {
   return `SOW-${year}-${seq}`;
 }
 
-export default function NewTemplatePage() {
+// Step indicator shown at the top of the form
+function StepIndicator({ current }: { current: 1 | 2 | 3 }) {
+  const steps = [
+    { n: 1, label: "Document Info" },
+    { n: 2, label: "Project Details" },
+    { n: 3, label: "Author & Metadata" },
+  ];
+  return (
+    <div className="flex items-center gap-0 mb-8">
+      {steps.map((step, i) => (
+        <React.Fragment key={step.n}>
+          <div className="flex items-center gap-2">
+            <div
+              className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-xs font-semibold ${
+                step.n <= current
+                  ? "bg-primary text-primary-foreground"
+                  : "bg-muted text-muted-foreground"
+              }`}
+            >
+              {step.n}
+            </div>
+            <span
+              className={`text-sm ${
+                step.n === current
+                  ? "font-medium text-foreground"
+                  : "text-muted-foreground"
+              }`}
+            >
+              {step.label}
+            </span>
+          </div>
+          {i < steps.length - 1 && (
+            <div className={`flex-1 mx-3 h-px ${step.n < current ? "bg-primary" : "bg-border"}`} />
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+}
+
+export default function NewSOWPage() {
   const router = useRouter();
   const today = new Date().toISOString().split("T")[0];
 
+  // All fields that the edit page reads from the setup param
   const [documentName, setDocumentName] = useState("");
   const [title, setTitle] = useState("Statement of Work");
   const [projectNumber, setProjectNumber] = useState(generateProjectNumber);
@@ -70,6 +111,9 @@ export default function NewTemplatePage() {
     e.preventDefault();
     if (!canSubmit) return;
 
+    // Encode all fields and pass to the edit page via the setup param.
+    // The edit page reads this in its useMemo defaultData block and pre-fills
+    // the cover page, header, and footer accordingly.
     const setupData = {
       documentName: documentName.trim(),
       title,
@@ -88,6 +132,9 @@ export default function NewTemplatePage() {
     router.push(`/edit?setup=${encoded}`);
   }
 
+  // Determine which step we're on based on filled fields
+  const step: 1 | 2 | 3 = preparedBy || department || date !== today ? 3 : clientName || building || location ? 2 : 1;
+
   return (
     <SidebarProvider>
       <AppSidebar />
@@ -95,40 +142,53 @@ export default function NewTemplatePage() {
         {/* Header */}
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4 bg-background sticky top-0 z-10">
           <SidebarTrigger className="-ml-1" />
-          <FilePlus className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold">New Statement of Work</span>
+          <div className="flex items-center gap-2">
+            <FilePlus className="h-4 w-4 text-primary" />
+            <span className="text-sm font-semibold">New Statement of Work</span>
+          </div>
         </header>
 
         {/* Scrollable content */}
-        <div className="flex-1 overflow-y-auto">
+        <div className="flex-1 overflow-y-auto bg-muted/20">
           <div className="max-w-2xl mx-auto py-10 px-6">
-            {/* Hero section */}
-            <div className="mb-8">
+
+            {/* Page heading */}
+            <div className="mb-6">
               <h1 className="text-2xl font-bold tracking-tight">
                 Create a New SOW
               </h1>
-              <p className="text-muted-foreground mt-1">
-                Fill in the basic project details below. You can always edit
-                these later in the document editor.
+              <p className="text-muted-foreground mt-1 text-sm">
+                Fill in the basic project details below. Everything here
+                pre-fills the cover page and header — you can edit it again
+                directly in the document editor.
               </p>
             </div>
 
-            <form onSubmit={handleSubmit}>
-              {/* ── Document Info ── */}
-              <Card className="mb-6">
+            {/* Progress indicator */}
+            <StepIndicator current={step} />
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+
+              {/* ── Document Information ── */}
+              <Card>
                 <CardHeader className="pb-4">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-primary" />
+                    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
+                      <FileText className="h-4 w-4 text-primary" />
+                    </div>
                     Document Information
                   </CardTitle>
                   <CardDescription>
-                    Give your document a name and set the SOW title.
+                    Give your document a name and set the SOW title and project
+                    number.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
+                  {/* Document name — only required field */}
                   <div className="space-y-2">
                     <Label htmlFor="documentName">
-                      Document Name <span className="text-red-500">*</span>
+                      Document Name{" "}
+                      <span className="text-destructive">*</span>
                     </Label>
                     <Input
                       id="documentName"
@@ -138,7 +198,8 @@ export default function NewTemplatePage() {
                       autoFocus
                     />
                     <p className="text-xs text-muted-foreground">
-                      This is how the document appears in your project list.
+                      This is how the document appears in your project list and
+                      becomes the save filename.
                     </p>
                   </div>
 
@@ -153,7 +214,10 @@ export default function NewTemplatePage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="projectNumber" className="flex items-center gap-1">
+                      <Label
+                        htmlFor="projectNumber"
+                        className="flex items-center gap-1"
+                      >
                         <Hash className="h-3 w-3" /> Project Number
                       </Label>
                       <Input
@@ -169,7 +233,7 @@ export default function NewTemplatePage() {
                     <Label htmlFor="description">Description</Label>
                     <Textarea
                       id="description"
-                      placeholder="Optional — brief summary of this SOW's purpose..."
+                      placeholder="Optional — brief summary of this SOW's purpose. Seeds the Project Overview section in the editor."
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       rows={3}
@@ -179,14 +243,17 @@ export default function NewTemplatePage() {
               </Card>
 
               {/* ── Project Details ── */}
-              <Card className="mb-6">
+              <Card>
                 <CardHeader className="pb-4">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <Building2 className="h-4 w-4 text-primary" />
+                    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
+                      <Building2 className="h-4 w-4 text-primary" />
+                    </div>
                     Project Details
                   </CardTitle>
                   <CardDescription>
-                    Client, location, and facility information.
+                    Client, facility, and location information for the cover
+                    page.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -194,7 +261,7 @@ export default function NewTemplatePage() {
                     <Label htmlFor="clientName">Client / Product Name</Label>
                     <Input
                       id="clientName"
-                      placeholder="e.g. Product Name"
+                      placeholder="e.g. F-16 Block 50 Avionics Suite"
                       value={clientName}
                       onChange={(e) => setClientName(e.target.value)}
                     />
@@ -202,7 +269,10 @@ export default function NewTemplatePage() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="building" className="flex items-center gap-1">
+                      <Label
+                        htmlFor="building"
+                        className="flex items-center gap-1"
+                      >
                         <Building2 className="h-3 w-3" /> Building
                       </Label>
                       <Input
@@ -213,12 +283,15 @@ export default function NewTemplatePage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="location" className="flex items-center gap-1">
+                      <Label
+                        htmlFor="location"
+                        className="flex items-center gap-1"
+                      >
                         <MapPin className="h-3 w-3" /> Location
                       </Label>
                       <Input
                         id="location"
-                        placeholder="e.g. Norman, Oklahoma"
+                        placeholder="e.g. Tinker AFB, Oklahoma"
                         value={location}
                         onChange={(e) => setLocation(e.target.value)}
                       />
@@ -228,20 +301,26 @@ export default function NewTemplatePage() {
               </Card>
 
               {/* ── Author & Metadata ── */}
-              <Card className="mb-8">
+              <Card>
                 <CardHeader className="pb-4">
                   <CardTitle className="text-base flex items-center gap-2">
-                    <User className="h-4 w-4 text-primary" />
+                    <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary/10">
+                      <User className="h-4 w-4 text-primary" />
+                    </div>
                     Author &amp; Metadata
                   </CardTitle>
                   <CardDescription>
-                    Who is preparing this document and when.
+                    Who is preparing this document, their department, and the
+                    classification level.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="preparedBy" className="flex items-center gap-1">
+                      <Label
+                        htmlFor="preparedBy"
+                        className="flex items-center gap-1"
+                      >
                         <User className="h-3 w-3" /> Prepared By
                       </Label>
                       <Input
@@ -252,12 +331,15 @@ export default function NewTemplatePage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="department" className="flex items-center gap-1">
+                      <Label
+                        htmlFor="department"
+                        className="flex items-center gap-1"
+                      >
                         <Briefcase className="h-3 w-3" /> Department
                       </Label>
                       <Input
                         id="department"
-                        placeholder="Department Name"
+                        placeholder="e.g. 76 MXSG/MXDEC"
                         value={department}
                         onChange={(e) => setDepartment(e.target.value)}
                       />
@@ -266,7 +348,10 @@ export default function NewTemplatePage() {
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="date" className="flex items-center gap-1">
+                      <Label
+                        htmlFor="date"
+                        className="flex items-center gap-1"
+                      >
                         <CalendarDays className="h-3 w-3" /> Date
                       </Label>
                       <Input
@@ -277,7 +362,10 @@ export default function NewTemplatePage() {
                       />
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="confidentiality" className="flex items-center gap-1">
+                      <Label
+                        htmlFor="confidentiality"
+                        className="flex items-center gap-1"
+                      >
                         <ShieldCheck className="h-3 w-3" /> Confidentiality
                       </Label>
                       <Select
@@ -303,9 +391,20 @@ export default function NewTemplatePage() {
                 </CardContent>
               </Card>
 
-              {/* ── Actions ── */}
-              <Separator className="mb-6" />
-              <div className="flex items-center justify-between">
+              {/* Info note */}
+              <div className="flex items-start gap-2.5 rounded-lg border border-blue-200 bg-blue-50 dark:border-blue-900/50 dark:bg-blue-900/20 px-4 py-3">
+                <Info className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5 shrink-0" />
+                <p className="text-xs text-blue-700 dark:text-blue-300 leading-relaxed">
+                  All fields except Document Name are optional. Anything left
+                  blank will show a placeholder in the editor that you can fill
+                  in directly on the document page.
+                </p>
+              </div>
+
+              <Separator />
+
+              {/* Actions */}
+              <div className="flex items-center justify-between pb-4">
                 <Button
                   type="button"
                   variant="ghost"
@@ -313,7 +412,11 @@ export default function NewTemplatePage() {
                 >
                   Cancel
                 </Button>
-                <Button type="submit" disabled={!canSubmit} className="gap-2">
+                <Button
+                  type="submit"
+                  disabled={!canSubmit}
+                  className="gap-2 min-w-[160px]"
+                >
                   Continue to Editor
                   <ArrowRight className="h-4 w-4" />
                 </Button>
