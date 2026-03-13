@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useSession } from "next-auth/react";
+import { useSession } from "@/lib/auth-client";
 import { TemplateGrid } from "@/components/template-grid";
 import { TemplateList } from "@/components/template-list";
 import {
@@ -90,7 +90,7 @@ const mockTemplates: Template[] = [
 ];
 
 export default function BaseTemplatesPage() {
-  const { data: session } = useSession();
+  const { data: sessionData } = useSession();
   const { viewMode, setViewMode } = useViewMode();
   const [searchQuery, setSearchQuery] = React.useState("");
   const [sortBy, setSortBy] = React.useState<SortOption>("date");
@@ -182,7 +182,7 @@ export default function BaseTemplatesPage() {
       <ViewComponent
         templates={filteredTemplates}
         isLoading={isLoading}
-        currentUserId={session?.user?.id}
+        currentUserId={sessionData?.user?.id}
         emptyMessage="No templates found"
         emptyDescription="Try adjusting your search or create a new template."
       />

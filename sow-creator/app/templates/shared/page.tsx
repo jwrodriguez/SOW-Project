@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useSession } from "next-auth/react";
+import { useSession } from "@/lib/auth-client";
 import { TemplateGrid } from "@/components/template-grid";
 import { TemplateList } from "@/components/template-list";
 import { TemplateFilters, type SortOption } from "@/components/template-filters";
@@ -37,7 +37,7 @@ const mockSharedTemplates: Template[] = [
 ];
 
 export default function SharedTemplatesPage() {
-  const { data: session } = useSession();
+  const { data: sessionData } = useSession();
   const { viewMode, setViewMode } = useViewMode();
   const [searchQuery, setSearchQuery] = React.useState("");
   const [sortBy, setSortBy] = React.useState<SortOption>("date");
@@ -115,7 +115,7 @@ export default function SharedTemplatesPage() {
       <ViewComponent
         templates={filteredTemplates}
         isLoading={isLoading}
-        currentUserId={session?.user?.id}
+        currentUserId={sessionData?.user?.id}
         emptyMessage="No shared templates"
         emptyDescription="Templates shared with you by others will appear here."
       />

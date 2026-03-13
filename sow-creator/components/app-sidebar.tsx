@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useSession } from "next-auth/react";
+import { useSession } from "@/lib/auth-client";
 import {
   BookOpen,
   Plane,
@@ -75,14 +75,14 @@ const navData = {
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { data: session, status } = useSession();
+  const { data: sessionData, isPending } = useSession();
 
   // Build user object from session or use placeholder during loading
-  const user = session?.user
+  const user = sessionData?.user
     ? {
-        name: session.user.name ?? "User",
-        email: session.user.email ?? "",
-        avatar: session.user.image ?? "",
+        name: sessionData.user.name ?? "User",
+        email: sessionData.user.email ?? "",
+        avatar: sessionData.user.image ?? "",
       }
     : null;
 
@@ -116,7 +116,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
 
       <SidebarFooter>
-        {status === "loading" ? (
+        {isPending ? (
           <div className="flex items-center gap-2 p-2">
             <Skeleton className="h-8 w-8 rounded-lg" />
             <div className="flex-1 space-y-1">
