@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["sow-creator/*"]
+    }
+  },
+  "include": ["sow-creator"]
+}
