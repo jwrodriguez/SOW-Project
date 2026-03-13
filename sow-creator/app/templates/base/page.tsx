@@ -17,6 +17,8 @@ import { mockTemplates } from "@/lib/mock-templates";
 import type { Template } from "@/components/template-card";
 
 export default function BaseTemplatesPage() {
+  const router = useRouter();
+  const { data: sessionData } = useSession();
   const { viewMode, setViewMode } = useViewMode();
   const [searchQuery, setSearchQuery] = React.useState("");
   const [sortBy, setSortBy] = React.useState<SortOption>("date");
