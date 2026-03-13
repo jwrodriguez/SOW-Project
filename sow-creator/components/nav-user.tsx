@@ -1,6 +1,7 @@
 "use client";
 
-import { signOut } from "next-auth/react";
+import { signOut } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
 import {
   BadgeCheck,
   Bell,
@@ -51,9 +52,11 @@ export function NavUser({
 }) {
   const { isMobile } = useSidebar();
   const { setTheme } = useTheme();
+  const router = useRouter();
 
-  const handleSignOut = () => {
-    signOut({ callbackUrl: "/login" });
+  const handleSignOut = async () => {
+    await signOut();
+    router.push("/login");
   };
 
   return (

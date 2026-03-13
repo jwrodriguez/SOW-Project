@@ -1,10 +1,13 @@
-import { auth } from "@/auth";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export async function proxy(req: NextRequest) {
-  const session = await auth();
-  const isLoggedIn = !!session;
+  // Better Auth stores session in a cookie named "better-auth.session_token"
+  const sessionCookie =
+    req.cookies.get("better-auth.session_token") ||
+    req.cookies.get("__Secure-better-auth.session_token");
+
+  const isLoggedIn = !!sessionCookie;
   const isOnLoginPage = req.nextUrl.pathname.startsWith("/login");
   const isAuthRoute = req.nextUrl.pathname.startsWith("/api/auth");
 
@@ -28,7 +31,7 @@ export async function proxy(req: NextRequest) {
 
 export const config = {
   matcher: [
-    // match paths except for static files or whatever branding and stuff
+    // Match paths except for static files
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };
