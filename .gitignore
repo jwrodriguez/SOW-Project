@@ -1,0 +1,30 @@
+# --- Global ---
+.DS_Store
+*.log
+
+# --- Docker ---
+# Ignore local override files to prevent merge conflicts
+docker-compose.override.yml
+
+# --- Secrets ---
+.env
+.env.local
+.env.production
+!.env.example 
+
+# --- Python (Global rules) ---
+__pycache__/
+*.py[cod]
+*$py.class
+venv/
+.venv/
+.pytest_cache/
+
+# --- Node/Next.js (Global rules) ---
+node_modules/
+.next/
+out/
+build/
+dist/
+.vercel/
+*.tsbuildinfo

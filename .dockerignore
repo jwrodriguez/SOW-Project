@@ -1,0 +1,21 @@
+# Ignore git history (saves huge space)
+.git/
+.gitignore
+
+# Ignore dependencies
+**/node_modules
+**/venv
+**/.venv
+
+# Ignore build artifacts
+**/.next
+**/__pycache__
+**/*.pyc
+
+# Ignore secrets (Docker should load these from env vars, not baked-in files)
+.env
+.env.local
+docker-compose.override.yml
+
+# Ignore documentation/markdown (optional, saves space)
+README.md

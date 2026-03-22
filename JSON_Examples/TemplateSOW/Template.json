@@ -1,0 +1,94 @@
+{
+    "type": "Template",
+    "name": "Test Stand SOW",
+    "description": "This is a template SOW for Test Stand projects.",
+    
+    "createdDate":"2026-01-01",
+    "modifiedDate":"2026-02-07",
+
+    "ownerInfo": {
+        "name": "John Doe",
+        "email": "john.doe@us.gov"
+    },
+
+    "sections": [
+        {
+            "specs": {
+
+                "type": "Section",
+                "title": "SCOPE OF WORK",
+                "description": "Scope: the full extent of what is necessary to fulfill the work stated in this document. Background: the context of the use of the items requested in this document.",
+                "numberInputs": 2
+            },
+            
+            "inputs": [
+                {
+                    "name": "Number of Items",
+                    "type": "NUMBER",
+                    "description": "Enter the number of items required."
+                },
+                {
+                    "name": "Airplane(s) Tested On",
+                    "type": "TEXT",
+                    "description": "Enter the name of the airplane(s) tested on."
+                }
+            ],
+            
+            "formattedText":"Scope: The following establishes the minimum requirement for the purchase, delivery, and installation of ${Number of Items} ${Airplane(s) Tested On} with equipment and accessories specified herein...\n\nBackground: The test stands described in this document are intended for use..."
+
+        },
+        {
+            "type": "Section",
+            "title": "APPLICABLE GOVERNMENT AND INDUSTRY STANDARDS:",
+            "content": "This section points to government and industry standards the contractor must follow.",
+            "defaultText":"Contractor, at a minimum, is required to comply with the current editions of the following requirements for design, construction, installation, and safety as applicable. The term “most recent edition” shall be understood to mean “most recently released edition as of date of issuance of contract.”",
+            "subSections":[
+                {
+                    "type": "SubSection",
+                    "title": "GOVERNMENT STANDARDS",
+                    "content": "This is the first sub-section.",
+                    "inputType": "EXAMPLE REQUIREMENT",
+                    "subSections":[
+                        {
+                            "type": "Sub-Sub-Section",
+                            "title": "GOVERNMENT STANDARD 1",
+                            "content": "This is the first sub-section.",
+                            "inputType": "EXAMPLE REQUIREMENT"
+                        },
+                        {
+                            "type": "Sub-Sub-Section",
+                            "title": "GOVERNMENT STANDARD 2",
+                            "content": "This is the second sub-section.",
+                            "inputType": "EXAMPLE REQUIREMENT"
+                        }
+                    ]
+                },
+                {
+                    "type": "SubSection",
+                    "title": "INDUSTRY STANDARDS",
+                    "content": "This is the second sub-section.",
+                    "inputType": "TEXT"
+                }
+            ]
+        },
+        {
+            "type": "Section",
+            "title": "Sections with Sub-Sections",
+            "content": "This section showcases the nested JSONs.",
+            "subSections": [
+                {
+                    "type": "SubSection",
+                    "title": "Sub-Section 1",
+                    "content": "This is the first sub-section.",
+                    "inputType": "TEXT"
+                },
+                {
+                    "type": "SubSection",
+                    "title": "Sub-Section 2",
+                    "content": "This is the second sub-section.",
+                    "inputType": "TEXT"
+                }
+            ]
+        }
+    ]
+}

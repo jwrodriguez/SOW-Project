@@ -18,66 +18,122 @@ Our project consists of creating a robust tool that lets users assemble SOWs(Sta
 
 - This is a Python tool that allows you to programmatically create Microsoft Word documents, which is a major feature required by the client. It'll be part of a backend service that takes data fed in by the Next.js frontend to then create .docx files and provide them to the user.
 
-## Installation Requirements
-**Node.js and npm**
-- Node.js https://nodejs.org/en/download
-- NPM(Should be automatically installed with Node.js)
+## Prerequisites
 
-## Features
+Before getting started, ensure you have the following installed:
 
-**Compatability with Sharepoint**
+| Tool | Purpose | Installation |
+|------|---------|--------------|
+| **Node.js** (v18+) | JavaScript runtime | [nodejs.org](https://nodejs.org/en/download) |
+| **npm** | Package manager | Included with Node.js |
+| **Docker** | Runs PostgreSQL database | [docker.com](https://www.docker.com/products/docker-desktop/) |
 
-- Users need to be able to upload a document to Sharepoint in order to save their work. This may either be done through downloading a document and saving it to sharepoint, or by linking the app to microsoft with an API.
+---
 
-**Creation of Form Templates**
+## Getting Started
 
-- Certain users must be able to create new templates for SOWs. This must have some sense of access control.
+### 1. Clone the repository
 
-**Document Creation Using Information Entered into Template SOWs**
+```bash
+git clone https://github.com/your-repo/SOW-Project.git
+cd SOW-Project
+```
 
-- Information put into loaded templates must be able to be saved to a document, whether it be .pdf or .docx or .txt
+### 2. Start the database
 
-## Goals
+The PostgreSQL database runs in Docker:
 
-- Long-lasting project use
-- Usability with non-computer wizards (both for template creation and information inputs)
-- Robust and dynamic template framework
+```bash
+docker-compose up -d db
+```
 
-## Progress Plan
+This starts a PostgreSQL container on port `5432` using credentials from `.env`.
 
-- Template framework/language by end of Sprint 1 (February 20th)
-- Basic proof of work by end of Sprint 1
-  - Web-app shell, with interactability
-  - Library of existing templates
-  - Load an existing template -> turn it into an interactable form
-- Template creation by end of Sprint 2 (March 13th)
-- Saveable documents by end of Sprint 3 (April 17th)
-- Demonstration with client "around 35% completion"
+### 3. Set up environment variables
 
-## Running the Code
-
-The Next.js frontend is located in the `sow-creator` directory of the repository. To start, navigate there:
+Navigate to the frontend and create your local environment file:
 
 ```bash
 cd sow-creator
+cp .env.example .env.local
 ```
 
-Then, to run the app, install the dependencies using npm and run the development server.
+The `.env.example` file contains all required variables with default values that work out of the box for local development.
+
+> **Note:** `AUTH_SECRET` is required by NextAuth but for local development, any random string works fine. A secure cryptographic key is only necessary for production.
+
+### 4. Install dependencies
 
 ```bash
-npm install # install dependencies
-npm run dev # start a development server.
+npm install
 ```
 
-To close a running development server, you can either kill the terminal the process is running in or use the `Ctrl+C` keyboard shortcut.
+### 5. Set up the database schema
 
-A production build of the frontend can be produced by running:
+Push the database schema:
+
+```bash
+npx drizzle-kit push
+```
+
+### 6. Seed test users
+
+Create initial users in the database:
+
+```bash
+npx tsx db/seed.ts
+```
+
+This creates two test accounts:
+
+| Email | Password | Role |
+|-------|----------|------|
+| admin@sowizard.mil | password123 | ADMIN |
+| user@sowizard.mil | password123 | USER |
+
+### 7. Start the development server
+
+```bash
+npm run dev
+```
+
+The app will be available at **http://localhost:3000**
+
+---
+
+## Quick Start (TL;DR)
+
+```bash
+# From project root
+docker-compose up -d db
+
+cd sow-creator
+npm install
+npx drizzle-kit push
+npx tsx db/seed.ts
+npm run dev
+```
+
+---
+
+## Stopping Services
+
+```bash
+# Stop the dev server
+Ctrl+C
+
+# Stop the database
+docker-compose down
+```
+
+---
+
+## Production Build
 
 ```bash
 npm run build
+npm start
 ```
-
-The backend service is a future task, so instructions for running it are forthcoming.
 
 ## Authors ✍️
 
