@@ -19,7 +19,7 @@ type TemplateData = { documentName: string; coverPage: CoverPageData; headerFoot
 // These replace the separate settings panels — click any text on the page to edit it
 
 // Single-line: looks like document text, becomes <input> on click
-function EditableText({ value, onChange, className = "", placeholder = "Click to edit", inputType = "text" }: {
+export function EditableText({ value, onChange, className = "", placeholder = "Click to edit", inputType = "text" }: {
   value: string; onChange: (v: string) => void; className?: string; placeholder?: string; inputType?: string;
 }) {
   const [editing, setEditing] = useState(false);
@@ -35,8 +35,16 @@ function EditableText({ value, onChange, className = "", placeholder = "Click to
   );
 }
 
-// Multi-line: becomes <textarea> on click
-function EditableArea({ value, onChange, className = "", placeholder = "Click to add content..." }: {
+/**
+ * multi-line click-to-edit text block — looks like document text, becomes an editable `<textarea>` on click. Auto-resizes with content
+ * @param value The text content to display/edit
+ * @param onChange Callback when text changes, recieves updated string value 
+ * @param className Optional additional class names for styling
+ * @param placeholder Placeholder text when value is empty
+ * @returns A React component that displays text and allows inline editing on click
+ */
+
+export function EditableArea({ value, onChange, className = "", placeholder = "Click to add content..." }: {
   value: string; onChange: (v: string) => void; className?: string; placeholder?: string;
 }) {
   const [editing, setEditing] = useState(false);
@@ -53,7 +61,7 @@ function EditableArea({ value, onChange, className = "", placeholder = "Click to
 }
 
 // Footer zone: displays resolved page number, reveals {PAGE} template while editing so users understand the pattern
-function EditableFooterZone({ value, onChange, pageNumber, className = "", placeholder = "" }: {
+export function EditableFooterZone({ value, onChange, pageNumber, className = "", placeholder = "" }: {
   value: string; onChange: (v: string) => void; pageNumber: number; className?: string; placeholder?: string;
 }) {
   const [editing, setEditing] = useState(false);
@@ -72,7 +80,7 @@ function EditableFooterZone({ value, onChange, pageNumber, className = "", place
 }
 
 // Reusable page wrapper — header and footer zones are editable directly on the page
-function DocumentPage({ hf, onHF, pageNumber, children }: {
+export function DocumentPage({ hf, onHF, pageNumber, children }: {
   hf: HeaderFooterData; onHF: (k: keyof HeaderFooterData, v: string) => void; pageNumber: number; children: React.ReactNode;
 }) {
   return (
@@ -100,7 +108,7 @@ function DocumentPage({ hf, onHF, pageNumber, children }: {
 }
 
 // Section rendered on the document — hover to reveal add/delete/table actions
-function SectionBlock({ section, depth, isOnlyTop, onUpdate, onAddChild, onAddSibling, onDelete, onAddTable, onDeleteTable, onUpdateCell, children }: {
+export function SectionBlock({ section, depth, isOnlyTop, onUpdate, onAddChild, onAddSibling, onDelete, onAddTable, onDeleteTable, onUpdateCell, children }: {
   section: SectionNode; depth: number; isOnlyTop: boolean;
   onUpdate: (u: Partial<SectionNode>) => void;
   onAddChild: () => void; onAddSibling: () => void; onDelete: () => void;
