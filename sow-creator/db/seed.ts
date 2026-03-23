@@ -1,10 +1,14 @@
+/**
+ * Seed script: `npx tsx db/seed.ts`
+ *
+ * Seeds through Better Auth's signUpEmail API (not raw inserts) so
+ * passwords get hashed and user + account rows are created together.
+ */
 import { auth } from "../lib/auth";
 
 async function seed() {
   console.log("Seeding database...\n");
 
-  // Create test users using Better Auth's server-side API
-  // This properly hashes passwords and creates the user + account records
   const testUsers = [
     {
       name: "Admin User",

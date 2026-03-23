@@ -1,3 +1,6 @@
+// Template card for grid view.
+// Footer cross-fades between metadata and action buttons on hover.
+// Edit/Delete only shown when isOwner is true.
 "use client";
 
 import * as React from "react";
@@ -176,7 +179,7 @@ export function TemplateCard({
             ))}
           </div>
         )}
-        {/* Bottom row — fixed height, content swaps on hover */}
+        {/* Bottom row: fixed height, content swaps on hover */}
         <div className="relative h-8 flex items-center">
           {/* Default state: date + shared badge */}
           <div className="absolute inset-0 flex items-center justify-between transition-opacity duration-150 group-hover:opacity-0 group-hover:pointer-events-none">

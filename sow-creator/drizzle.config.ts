@@ -1,3 +1,5 @@
+// Drizzle Kit CLI config (npx drizzle-kit push / generate).
+// Not imported at runtime, only used by the CLI.
 import { defineConfig } from "drizzle-kit";
 
 export default defineConfig({

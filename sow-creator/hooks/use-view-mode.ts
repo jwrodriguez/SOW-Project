@@ -1,3 +1,8 @@
+/**
+ * useViewMode: persists grid/list toggle in localStorage.
+ * Initializes to "grid" on server, syncs from localStorage on mount
+ * to avoid hydration mismatch.
+ */
 "use client";
 
 import * as React from "react";
@@ -9,7 +14,6 @@ export function useViewMode() {
   const [viewMode, setViewMode] = React.useState<ViewMode>("grid");
   const [isHydrated, setIsHydrated] = React.useState(false);
 
-  // Load from localStorage on mount
   React.useEffect(() => {
     const stored = localStorage.getItem(STORAGE_KEY);
     if (stored === "grid" || stored === "list") {
@@ -18,7 +22,6 @@ export function useViewMode() {
     setIsHydrated(true);
   }, []);
 
-  // Save to localStorage when viewMode changes
   const handleSetViewMode = React.useCallback((mode: ViewMode) => {
     setViewMode(mode);
     localStorage.setItem(STORAGE_KEY, mode);

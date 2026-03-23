@@ -1,6 +1,17 @@
+# Docker Compose, multi-service dev environment.
+#
+# Services:
+#   db  : PostgreSQL 15 database. Credentials are read from the root `.env`
+#         file (see `.env.example`). Data is persisted in a named volume so
+#         it survives `docker-compose down`.
+#   api : Python FastAPI service (docx-service) that generates Word (.docx)
+#         documents from JSON payloads sent by the Next.js frontend. Runs
+#         with `--reload` for live reloading during development.
+
 version: "3.8"
 
 services:
+  # PostgreSQL database. Stores users, sessions, templates, and SOWs.
   db:
     image: postgres:15-alpine
     container_name: sow_db
@@ -13,6 +24,8 @@ services:
     volumes:
       - db_data:/var/lib/postgresql/data
 
+  # Word document generation service. Receives template data via REST API
+  # and returns a .docx file.
   api:
     build: ./docx-service
     container_name: sow_api

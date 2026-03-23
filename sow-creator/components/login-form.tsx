@@ -1,3 +1,6 @@
+// Login form. Email/password + Microsoft SSO.
+// Uses Better Auth client; router.refresh() after login forces
+// server components to re-fetch with the new session cookie.
 "use client";
 
 import { useState } from "react";
