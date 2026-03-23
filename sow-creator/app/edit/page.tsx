@@ -21,6 +21,12 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 // ============= TYPES =============
+// TypeScript type definitions for every data shape in this file.
+// FieldType is the set of allowed blank field types.
+// TemplateField describes one fillable blank slot inserted into section content.
+// SectionNode is recursive — children: SectionNode[] enables nested subsections.
+// locked: boolean on SectionNode controls whether the section is editable.
+// TemplateData is the top-level document object that gets serialized to JSON on Save.
 type FieldType = "text" | "number" | "word" | "sentence" | "paragraph" | "list" | "date";
 type TemplateField = {
   id: string; label: string; type: FieldType;
@@ -46,6 +52,7 @@ type TemplateData = {
   coverPage: CoverPageData; headerFooter: HeaderFooterData; sections: SectionNode[];
 };
 
+// Allowed field types listed here so both the insert form and edit form share the same options
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "text", label: "Text" }, { value: "number", label: "Number" },
   { value: "word", label: "Word" }, { value: "sentence", label: "Sentence" },
@@ -54,6 +61,8 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
 ];
 
 // ============= RIBBON BUTTON =============
+// Reusable button for the editing ribbon toolbar.
+// Supports disabled, active (highlighted), and danger (red) visual states.
 function RibbonBtn({ icon: Icon, label, onClick, disabled, active, danger }: {
   icon: LucideIcon; label: string; onClick?: () => void; disabled?: boolean; active?: boolean; danger?: boolean;
 }) {
@@ -70,6 +79,8 @@ function RibbonBtn({ icon: Icon, label, onClick, disabled, active, danger }: {
 }
 
 // ============= INLINE EDITING =============
+// Single-line click-to-edit field. When disabled (section locked), renders as plain text.
+// When enabled, clicking swaps the display div for an <input>. Enter or blur confirms.
 function EditableText({ value, onChange, className = "", placeholder = "Click to edit", disabled }: {
   value: string; onChange: (v: string) => void; className?: string; placeholder?: string; disabled?: boolean;
 }) {
@@ -91,6 +102,8 @@ function EditableText({ value, onChange, className = "", placeholder = "Click to
   );
 }
 
+// Multi-line click-to-edit field. Same disabled/enabled pattern as EditableText
+// but uses a <textarea>. Row height auto-adjusts based on newline count in the content.
 function EditableArea({ value, onChange, className = "", placeholder = "Click to add content...", disabled }: {
   value: string; onChange: (v: string) => void; className?: string; placeholder?: string; disabled?: boolean;
 }) {
@@ -112,6 +125,8 @@ function EditableArea({ value, onChange, className = "", placeholder = "Click to
   );
 }
 
+// Footer zone variant — in display mode replaces {PAGE} with the real page number.
+// In edit mode the raw {PAGE} template text is shown so users can see and modify it.
 function EditableFooterZone({ value, onChange, pageNumber, className = "", placeholder = "" }: {
   value: string; onChange: (v: string) => void; pageNumber: number; className?: string; placeholder?: string;
 }) {
@@ -130,6 +145,9 @@ function EditableFooterZone({ value, onChange, pageNumber, className = "", place
 }
 
 // ============= BLANK CHIP =============
+// Renders a fillable blank as a colored inline pill inside section content.
+// Color is driven by the data-type attribute and CSS in globals.css (.blank-chip styles).
+// Clicking opens the blank's property editor in the ribbon. X removes it.
 function BlankChip({ field, onClick, onDelete }: {
   field: TemplateField; onClick: () => void; onDelete: () => void;
 }) {
@@ -146,6 +164,9 @@ function BlankChip({ field, onClick, onDelete }: {
 }
 
 // ============= CONTENT RENDERER (parses {{field_id}} blanks) =============
+// Parses the section content string for {{field_id}} tokens and renders them as BlankChips.
+// Plain text between tokens renders as normal spans.
+// When unlocked: click-to-edit textarea. When locked: static text with interactive blank chips.
 function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, onChange }: {
   content: string; fields: TemplateField[]; locked: boolean;
   onClickBlank: (fieldId: string) => void; onDeleteBlank: (fieldId: string) => void;
@@ -206,6 +227,8 @@ function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, 
 }
 
 // ============= DOCUMENT PAGE WRAPPER =============
+// Renders an 8.5x11in white page with editable header and footer zones (left/center/right).
+// Children are rendered in the body area between the header and footer.
 function DocumentPage({ hf, onHF, pageNumber, children }: {
   hf: HeaderFooterData; onHF: (k: keyof HeaderFooterData, v: string) => void; pageNumber: number; children: React.ReactNode;
 }) {
@@ -231,6 +254,10 @@ function DocumentPage({ hf, onHF, pageNumber, children }: {
 }
 
 // ============= SORTABLE SECTION BLOCK =============
+// Renders one section on the document page with drag-and-drop reordering via @dnd-kit.
+// useSortable provides the ref, drag listeners, and transform/transition for the drag animation.
+// isSelected adds a highlight ring. locked controls whether content is editable.
+// Hover toolbar exposes lock/unlock, add sub, add sibling, add table, and delete.
 function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fields,
   onSelect, onUpdate, onAddChild, onAddSibling, onDelete, onToggleLock,
   onAddTable, onDeleteTable, onUpdateCell, onClickBlank, onDeleteBlank, children }: {
@@ -253,6 +280,7 @@ function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fields,
   const [showTableForm, setShowTableForm] = useState(false);
   const [tr, setTr] = useState(3);
   const [tc, setTc] = useState(3);
+  // Heading size scales with depth: 0 = H1, 1 = H2, 2+ = H3
   const headingClass = depth === 0 ? "text-2xl font-bold" : depth === 1 ? "text-xl font-semibold" : "text-lg font-medium";
 
   return (
@@ -350,6 +378,9 @@ function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fields,
 }
 
 // ============= SORTABLE NAV ITEM =============
+// Renders one item in the left section navigator with drag-and-drop support.
+// Clicking selects the section and smooth-scrolls the document page to it.
+// Lock icon shown when locked. Expand/collapse arrow shown when children exist.
 function SortableNavItem({ section, depth, isExpanded, onToggleExpand, onSelect, isSelected }: {
   section: SectionNode; depth: number; isExpanded: boolean;
   onToggleExpand: () => void; onSelect: () => void; isSelected: boolean;
@@ -382,24 +413,36 @@ function SortableNavItem({ section, depth, isExpanded, onToggleExpand, onSelect,
 }
 
 // ============= PURE SECTION HELPERS =============
+// These functions take a section tree in and return a new tree out — no state mutations.
+// Called inside setData() so they always operate on the latest state snapshot.
+ 
+// Assigns correct auto-numbers to the entire tree. Top-level = "1.0", children = "1.1", "1.1.1" etc.
 function renumberSections(sections: SectionNode[], prefix = ""): SectionNode[] {
   return sections.map((s, i) => {
     const number = prefix ? `${prefix}.${i + 1}` : `${i + 1}.0`;
     return { ...s, number, children: renumberSections(s.children, number.replace(/\.0$/, "")) };
   });
 }
+
+// Searches the tree for a section by ID — used before updates that need current field values
 function findSection(sections: SectionNode[], id: string): SectionNode | null {
   for (const s of sections) { if (s.id === id) return s; const found = findSection(s.children, id); if (found) return found; }
   return null;
 }
+
+// Returns a new tree with one section's fields merged with the updates object
 function updateSection(sections: SectionNode[], id: string, updates: Partial<SectionNode>): SectionNode[] {
   return sections.map(s => s.id === id ? { ...s, ...updates } : { ...s, children: updateSection(s.children, id, updates) });
 }
+
+// Appends a blank subsection inside the given parent
 function addChildSection(sections: SectionNode[], parentId: string): SectionNode[] {
   return sections.map(s => s.id === parentId
     ? { ...s, children: [...s.children, { id: `sec-${Date.now()}`, number: "", title: "New Subsection", content: "", locked: true, tables: [], children: [] }] }
     : { ...s, children: addChildSection(s.children, parentId) });
 }
+
+// Inserts a new section directly after the sibling at the same nesting level
 function addSiblingHelper(sections: SectionNode[], siblingId: string): { sections: SectionNode[]; added: boolean } {
   for (let i = 0; i < sections.length; i++) {
     if (sections[i].id === siblingId) {
@@ -412,9 +455,13 @@ function addSiblingHelper(sections: SectionNode[], siblingId: string): { section
   }
   return { sections, added: false };
 }
+
+// Removes a section and all its children from the tree
 function deleteSection(sections: SectionNode[], id: string): SectionNode[] {
   return sections.filter(s => s.id !== id).map(s => ({ ...s, children: deleteSection(s.children, id) }));
 }
+
+// Builds a flat list of TOC entries with estimated page numbers for Page 2
 function generateTOCEntries(sections: SectionNode[], depth = 0, startPage = 2) {
   const entries: Array<{ number: string; title: string; page: number; depth: number }> = [];
   let page = startPage;
@@ -425,7 +472,9 @@ function generateTOCEntries(sections: SectionNode[], depth = 0, startPage = 2) {
   }
   return { entries, nextPage: page };
 }
-// Reorder within a sibling list for drag-and-drop
+
+// Handles drag-and-drop reordering — finds the dragged section in its sibling list
+// and swaps it using arrayMove from @dnd-kit. Recurses into children if not found at top level.
 function reorderSectionsByIds(sections: SectionNode[], activeId: string, overId: string): SectionNode[] {
   const activeIdx = sections.findIndex(s => s.id === activeId);
   const overIdx = sections.findIndex(s => s.id === overId);
@@ -433,6 +482,7 @@ function reorderSectionsByIds(sections: SectionNode[], activeId: string, overId:
   // Try recursively in children
   return sections.map(s => ({ ...s, children: reorderSectionsByIds(s.children, activeId, overId) }));
 }
+
 // Remove blank token from all section content
 function removeBlankFromContent(sections: SectionNode[], fieldId: string): SectionNode[] {
   const token = `{{${fieldId}}}`;
@@ -444,9 +494,13 @@ function removeBlankFromContent(sections: SectionNode[], fieldId: string): Secti
 }
 
 // ============= MAIN COMPONENT (inner) =============
+// Split from the default export so useSearchParams() can be wrapped in Suspense (required by Next.js).
+// All document state, blank state, DnD state, and render functions live here.
 function SowEditPageInner() {
   const searchParams = useSearchParams();
 
+  // Build initial document state once with useMemo.
+  // If ?setup= param is present (base64 JSON from the /new form), decode and override defaults.
   const defaultData: TemplateData = useMemo(() => {
     const base: TemplateData = {
       documentName: "Untitled Document",
@@ -504,11 +558,11 @@ function SowEditPageInner() {
     return base;
   }, [searchParams]);
 
-  const [data, setData] = useState<TemplateData>(defaultData);
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(defaultData.sections.map(s => s.id)));
+  const [data, setData] = useState<TemplateData>(defaultData); // Primary document state — all edits call setData with functional updates to avoid stale closures
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(defaultData.sections.map(s => s.id))); // Tracks which section IDs are expanded in the left navigator
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(defaultData.documentName);
-  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null);
+  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null); // Tracks which section is currently selected — drives ribbon button state
 
   // Blank insertion form state
   const [showBlankForm, setShowBlankForm] = useState(false);
@@ -522,13 +576,13 @@ function SowEditPageInner() {
 
   const selectedSection = selectedSectionId ? findSection(data.sections, selectedSectionId) : null;
 
-  // DnD sensors
+  // DnD sensors - PointerSensor requires 5px movement before activating to avoid accidental drags
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
     useSensor(KeyboardSensor)
   );
 
-  // Updaters
+  // Shorthand updaters for cover page and header/footer fields
   const updateCover = (k: keyof typeof data.coverPage, v: string) =>
     setData(p => ({ ...p, coverPage: { ...p.coverPage, [k]: v } }));
   const updateHF = (k: keyof HeaderFooterData, v: string) =>
@@ -538,6 +592,7 @@ function SowEditPageInner() {
   }
 
   // Save / Load / Export
+  // handleSave serializes state to JSON and triggers a browser file download — no server involved
   function handleSave() {
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
@@ -546,6 +601,8 @@ function SowEditPageInner() {
     a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.json`;
     a.click(); URL.revokeObjectURL(url);
   }
+
+  // handleLoadJSON opens a file picker, reads the JSON file, and replaces the current document
   function handleLoadJSON() {
     const input = document.createElement("input");
     input.type = "file"; input.accept = ".json";
@@ -563,11 +620,15 @@ function SowEditPageInner() {
     };
     input.click();
   }
+
+  // handleExport is a placeholder — planned: Next.js API → sanitize → Flask → python-docx → .docx download
   function handleExport() {
     alert("Export to Word will generate a .docx file. Backend integration coming soon!");
   }
 
   // ── Insert Blank ──
+  // Creates a new TemplateField, appends its {{fieldId}} token to the selected section's content,
+  // and adds the field to data.fields so SectionContent can render it as a BlankChip
   function handleInsertBlank() {
     if (!blankLabel.trim() || !selectedSectionId) return;
     const fieldId = `field_${blankLabel.trim().toLowerCase().replace(/\s+/g, "_")}_${Date.now()}`;
@@ -589,6 +650,7 @@ function SowEditPageInner() {
   }
 
   // ── Delete Blank (from data.fields + all section content) ──
+  // Removes the field from data.fields and strips its {{token}} from every section content string
   function handleDeleteBlank(fieldId: string) {
     setData(p => ({
       ...p,
@@ -599,11 +661,14 @@ function SowEditPageInner() {
   }
 
   // ── Update Blank Field ──
+  // Updates label, type, placeholder, or required on an existing TemplateField
   function handleUpdateField(fieldId: string, updates: Partial<TemplateField>) {
     setData(p => ({ ...p, fields: p.fields.map(f => f.id === fieldId ? { ...f, ...updates } : f) }));
   }
 
   // ── DnD handler ──
+  // Called when a drag ends — uses reorderSectionsByIds to move the dragged section
+  // to the dropped position, then renumbers the entire tree
   function handleDragEnd(event: DragEndEvent) {
     const { active, over } = event;
     if (!over || active.id === over.id) return;
@@ -614,6 +679,8 @@ function SowEditPageInner() {
   }
 
   // ── Section rendering ──
+  // Recursively renders the section tree as SortableSectionBlock components.
+  // All mutation callbacks defined here so they can close over setData from this component.
   function renderSections(sections: SectionNode[], depth = 0): React.ReactNode {
     return (
       <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
@@ -645,6 +712,7 @@ function SowEditPageInner() {
             const sec = findSection(p.sections, section.id);
             return { ...p, sections: updateSection(p.sections, section.id, { tables: sec?.tables?.filter(t => t.id !== tid) }) };
           });
+          // Updates a single cell — maps over rows and cells, replacing only the one that changed
           const onUpdateCell = (tid: string, row: number, col: number, val: string) => setData(p => {
             const sec = findSection(p.sections, section.id);
             const tables = sec?.tables?.map(t => t.id === tid
@@ -671,6 +739,8 @@ function SowEditPageInner() {
   }
 
   // ── Nav rendering ──
+  // Renders the left panel section list with drag-and-drop support.
+  // Clicking selects a section and smooth-scrolls to it on the document page.
   function renderNav(sections: SectionNode[], depth = 0): React.ReactNode {
     return (
       <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
@@ -737,6 +807,8 @@ function SowEditPageInner() {
             {/* Right: ribbon + document pages */}
             <div className="flex-1 flex flex-col overflow-hidden">
               {/* ── Frosted Editing Ribbon ── */}
+              {/* Sticky toolbar above the document. Groups: File, Insert, Lock, Delete. */}
+              {/* Buttons requiring a selection are disabled when selectedSection is null. */}
               <div className="editor-ribbon sticky top-0 z-30 px-3 py-1.5 flex items-center gap-1 shrink-0">
                 {/* File group */}
                 <RibbonBtn icon={Save} label="Save" onClick={handleSave} />
@@ -861,7 +933,7 @@ function SowEditPageInner() {
               {/* ── Document pages ── */}
               <div className="flex-1 overflow-y-auto bg-gray-200 p-8" onClick={() => setSelectedSectionId(null)}>
                 <div className="space-y-8">
-                  {/* Cover Page */}
+                  {/* Cover Page — all fields are EditableText components connected to coverPage state */}
                   <div className="bg-white shadow-lg mx-auto relative text-black" style={{ width: "8.5in", height: "11in" }}>
                     <div className="absolute inset-8 border-4 border-black pointer-events-none" />
                     <div className="absolute inset-8 flex items-center justify-center">
@@ -884,7 +956,7 @@ function SowEditPageInner() {
                     </div>
                   </div>
 
-                  {/* Table of Contents */}
+                  {/* Table of Contents — auto-generated from tocData, not directly editable */}
                   <DocumentPage hf={data.headerFooter} onHF={updateHF} pageNumber={2}>
                     <h2 className="font-bold text-lg mb-6 text-center">Table of Contents</h2>
                     <div className="space-y-0.5">
@@ -901,7 +973,7 @@ function SowEditPageInner() {
                     </div>
                   </DocumentPage>
 
-                  {/* Section Content */}
+                  {/* Section Content — locked sections shown read-only, unlocked sections editable */}
                   <DocumentPage hf={data.headerFooter} onHF={updateHF} pageNumber={3}>
                     {renderSections(data.sections)}
                     <button onClick={() => setData(p => ({

@@ -2,19 +2,12 @@
 
 import * as React from "react";
 import { Check, X, AlertCircle, CheckCircle2, Circle } from "lucide-react";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 
-// ── Checklist data ────────────────────────────────────────────────────────────
-// Based on scope: standardized language and consistency requirements.
-// Grouped by SOW section so engineers know where to look.
-
+// Static checklist data grouped by SOW section.
+// Each item has a unique ID used to track checked/unchecked state in the Set below. 
+// For now these are hardcoded, but they could be loaded from a JSON file or API in the future for easier maintenance.
 const checklistSections = [
   {
     section: "Cover Page",
@@ -93,12 +86,15 @@ const checklistSections = [
   },
 ];
 
+// Flat list of every item ID — used for check all / clear all and total count
 const allItemIds = checklistSections.flatMap((s) => s.items.map((i) => i.id));
 
 // ── Component ─────────────────────────────────────────────────────────────────
 export default function ComplianceCheckPage() {
+  // A Set of checked item IDs. Using a Set makes add/remove/lookup O(1).
   const [checked, setChecked] = React.useState<Set<string>>(new Set());
 
+  // Toggles a single item — adds if not present, removes if present
   function toggle(id: string) {
     setChecked((prev) => {
       const next = new Set(prev);
@@ -115,10 +111,12 @@ export default function ComplianceCheckPage() {
     setChecked(new Set());
   }
 
+  // Derive completion percentage for the progress bar and color logic
   const total = allItemIds.length;
   const done = checked.size;
   const pct = Math.round((done / total) * 100);
 
+  // Progress bar and status text color shifts: gray → amber (50%) → green (100%)
   const statusColor =
     pct === 100
       ? "text-green-600"
@@ -131,7 +129,7 @@ export default function ComplianceCheckPage() {
 
   return (
     <div className="space-y-6 max-w-3xl">
-      {/* Page heading */}
+      {/* Page heading and bulk action buttons */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Compliance Check</h2>
@@ -151,7 +149,7 @@ export default function ComplianceCheckPage() {
         </div>
       </div>
 
-      {/* Progress summary */}
+      {/* Overall progress bar — width is driven by pct, color changes at 50% and 100% */}
       <Card>
         <CardContent className="pt-5 pb-5">
           <div className="flex items-center justify-between mb-2">
@@ -175,7 +173,7 @@ export default function ComplianceCheckPage() {
         </CardContent>
       </Card>
 
-      {/* Checklist sections */}
+      {/* Checklist sections — card border turns green when all items in the section are checked */}
       <div className="space-y-5">
         {checklistSections.map((section) => {
           const sectionIds = section.items.map((i) => i.id);
@@ -213,7 +211,7 @@ export default function ComplianceCheckPage() {
                           : "hover:bg-muted/50"
                       }`}
                     >
-                      {/* Custom checkbox */}
+                      {/* Custom checkbox div — fills green and shows checkmark when checked */}
                       <div
                         onClick={() => toggle(item.id)}
                         className={`mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border transition-colors ${
@@ -224,6 +222,7 @@ export default function ComplianceCheckPage() {
                       >
                         {isChecked && <Check className="h-2.5 w-2.5 text-white" />}
                       </div>
+                      {/* Label text gets a strikethrough when the item is checked */}
                       <span
                         onClick={() => toggle(item.id)}
                         className={`text-sm leading-snug ${
