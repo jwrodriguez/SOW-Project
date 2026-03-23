@@ -10,14 +10,22 @@ module.exports = {
     prefix: "<rootDir>/",
   }),
   transform: {
-    "^.+\\.(ts|tsx)$": [
-      "ts-jest",
-      {
-        tsconfig: {
-          ...compilerOptions,
-          jsx: "react-jsx",
-        },
+  "^.+\\.(ts|tsx)$": [
+    "ts-jest",
+    {
+      tsconfig: {
+        ...compilerOptions,
+        jsx: "react-jsx",
       },
-    ],
-  },
+    },
+  ],
+},
+moduleNameMapper: {
+  "^@/(.*)$": "<rootDir>/$1",
+  "next-auth/react": "<rootDir>/__mocks__/next-auth-react.js",
+  "next/navigation": "<rootDir>/__mocks__/next-navigation.js"
+},
+transformIgnorePatterns: [
+  "node_modules/(?!(next-auth|next)/)"
+],
 };

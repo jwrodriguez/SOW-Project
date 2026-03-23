@@ -6,21 +6,28 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { SectionNode, TableData, CoverPageData, HeaderFooterData, TemplateData } from "@/types/pageTypes"
 import { Plus, Trash2, Download, Save, FileText, ChevronRight, ChevronDown, ListOrdered, Edit2, Table as TableIcon } from "lucide-react";
-
-// ============= TYPES =============
-type SectionNode = { id: string; number: string; title: string; content: string; tables?: TableData[]; children: SectionNode[] };
-type TableData = { id: string; rows: number; cols: number; data: string[][] };
-type CoverPageData = { title: string; projectNumber: string; clientName: string; building: string; location: string; preparedBy: string; department: string; date: string; version: string; confidentiality: string };
-type HeaderFooterData = { headerLeft: string; headerCenter: string; headerRight: string; footerLeft: string; footerCenter: string; footerRight: string; showPageNumbers: boolean; pageNumberPosition: "footer-center" | "footer-right" | "header-right" };
-type TemplateData = { documentName: string; coverPage: CoverPageData; headerFooter: HeaderFooterData; sections: SectionNode[] };
 
 // ============= INLINE EDITING HELPERS =============
 // These replace the separate settings panels — click any text on the page to edit it
 
-// Single-line: looks like document text, becomes <input> on click
+/**
+ * single-line click-to-edit text block — looks like document text, becomes an editable `<input>` on click
+ * @param value The text content to display/edit
+ * @param onChange Callback when text changes, recieves updated string value
+ * @param className Optional additional class names for styling
+ * @param placeholder Placeholder text when value is empty
+ * @param inputType The type of the input field (e.g. "text", "date") — defaults to "text"
+ * 
+ * @returns A JSX element that displays text and allows inline editing on click, with support for different input types and customizable styling. When the value is empty, it shows a placeholder to prompt the user to add content.
+ */
 export function EditableText({ value, onChange, className = "", placeholder = "Click to edit", inputType = "text" }: {
-  value: string; onChange: (v: string) => void; className?: string; placeholder?: string; inputType?: string;
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+  placeholder?: string;
+  inputType?: string;
 }) {
   const [editing, setEditing] = useState(false);
   return editing ? (
@@ -41,11 +48,15 @@ export function EditableText({ value, onChange, className = "", placeholder = "C
  * @param onChange Callback when text changes, recieves updated string value 
  * @param className Optional additional class names for styling
  * @param placeholder Placeholder text when value is empty
- * @returns A React component that displays text and allows inline editing on click
+ * 
+ * @returns A JSX element that displays text and allows inline editing on click
  */
 
 export function EditableArea({ value, onChange, className = "", placeholder = "Click to add content..." }: {
-  value: string; onChange: (v: string) => void; className?: string; placeholder?: string;
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+  placeholder?: string;
 }) {
   const [editing, setEditing] = useState(false);
   return editing ? (
@@ -59,10 +70,22 @@ export function EditableArea({ value, onChange, className = "", placeholder = "C
     </div>
   );
 }
-
-// Footer zone: displays resolved page number, reveals {PAGE} template while editing so users understand the pattern
-export function EditableFooterZone({ value, onChange, pageNumber, className = "", placeholder = "" }: {
-  value: string; onChange: (v: string) => void; pageNumber: number; className?: string; placeholder?: string;
+/**
+ * Editable footer zone component — similar to EditableArea but supports {PAGE} token that renders the current page number. This helps users understand how to include page numbers in their footer.
+ * @param value The text content to display/edit
+ * @param onChange Callback when text changes, recieves updated string value
+ * @param pageNumber page number input to replace {PAGE} token with in display mode
+ * @param className Optional additional class names for styling
+ * @param placeholder Placeholder text when value is empty
+ * 
+ * @returns A JSX element for editing footer text with support for dynamic page numbers via the {PAGE} token. Displays the resolved page number in display mode and shows the {PAGE} token in edit mode to clarify usage.
+ */
+export function EditableFooterZone({ value, onChange, pageNumber, className = "", placeholder = "Click to add footer content..." }: {
+  value: string;
+  onChange: (v: string) => void;
+  pageNumber: number;
+  className?: string;
+  placeholder?: string;
 }) {
   const [editing, setEditing] = useState(false);
   return editing ? (
@@ -78,8 +101,14 @@ export function EditableFooterZone({ value, onChange, pageNumber, className = ""
     </div>
   );
 }
-
-// Reusable page wrapper — header and footer zones are editable directly on the page
+/**
+ * @param hf The Header and Footer Data to be imported into the reusable page wrapper
+ * @param onHF setter function that updates a designated section of content in the HeaderFooterData object
+ * @param pageNumber The designated number of the page to be generated in the open document
+ * @param children Document body content to be imported into the page wrapper
+ * 
+ * @returns A JSX Element component serving as a template/design for a specific page of the document with editable header footer areas
+ */
 export function DocumentPage({ hf, onHF, pageNumber, children }: {
   hf: HeaderFooterData; onHF: (k: keyof HeaderFooterData, v: string) => void; pageNumber: number; children: React.ReactNode;
 }) {
@@ -106,7 +135,20 @@ export function DocumentPage({ hf, onHF, pageNumber, children }: {
     </div>
   );
 }
-
+/**
+ * @param section Section segment to be rendered into the document
+ * @param depth Numerical value indicating placement of section in the document
+ * @param isOnlyTop Boolean value indicating whether a section block resides at the topmost layer of the document
+ * @param onUpdate Convert content of section to be editable
+ * @param onAddChild Add a subsection to the section block in the document
+ * @param onAddSibling Add a section block of the same depth to the document
+ * @param onDelete Deletion function removing the section block from the document
+ * @param onAddTable Setter function adding a table object to section of the document. This is done with a (row, column) input
+ * @param onDeleteTable Deletion function removing a table object from section of the document
+ * @param onUpdateCell Setter function updating a cell value of a given table for a section block in the document
+ * @param children Existing subsections and subtables of a particular section block in the document are fed into this parameter 
+ * @returns A JSX Section Block Component
+ */
 // Section rendered on the document — hover to reveal add/delete/table actions
 export function SectionBlock({ section, depth, isOnlyTop, onUpdate, onAddChild, onAddSibling, onDelete, onAddTable, onDeleteTable, onUpdateCell, children }: {
   section: SectionNode; depth: number; isOnlyTop: boolean;
