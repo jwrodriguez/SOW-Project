@@ -1,3 +1,9 @@
+/**
+ * Root layout. Wraps every page.
+ *
+ * Fonts: Inter (body), Geist (UI), Geist Mono (code).
+ * suppressHydrationWarning is required by next-themes.
+ */
 import type { Metadata } from "next";
 import { Geist, Geist_Mono, Inter } from "next/font/google";
 import "./globals.css";
@@ -43,4 +49,3 @@ export default function RootLayout({
     </html>
   );
 }
-

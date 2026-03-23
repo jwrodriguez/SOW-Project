@@ -1,3 +1,5 @@
+// App sidebar. Data-driven nav (add routes in navData).
+// Footer shows session user info with a loading skeleton.
 "use client";
 
 import * as React from "react";
@@ -25,6 +27,8 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 
+// Navigation data. Adding a new page is as simple as appending an object.
+// `isActive` controls whether the collapsible section starts expanded.
 const navData = {
   navMain: [
     {
@@ -73,7 +77,8 @@ const navData = {
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { data: sessionData, isPending } = useSession();
 
-  // Build user object from session or use placeholder during loading
+  // Build user object from session, or null while loading/unauthenticated.
+  // The footer conditionally renders: skeleton -> user info -> nothing.
   const user = sessionData?.user
     ? {
         name: sessionData.user.name ?? "User",

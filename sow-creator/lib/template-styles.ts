@@ -1,3 +1,8 @@
+/**
+ * Template design tokens. Maps icon/color string keys (stored in DB)
+ * to Lucide components and Tailwind classes. Used by template-card,
+ * template-grid, and template-list for consistent rendering.
+ */
 import {
   FileText,
   Wrench,
@@ -49,6 +54,7 @@ export const TEMPLATE_ICONS: Record<TemplateIcon, LucideIcon> = {
   globe: Globe,
 };
 
+// bg = 10% opacity tint, text = full color with dark mode variant.
 export const TEMPLATE_COLORS: Record<
   TemplateColor,
   { bg: string; text: string }
@@ -76,6 +82,8 @@ export const TEMPLATE_COLORS: Record<
     text: "text-emerald-600 dark:text-emerald-400",
   },
 };
+
+// Safe lookups. Falls back to "file" / "blue" for missing/invalid values.
 
 export function getTemplateIcon(icon?: TemplateIcon): LucideIcon {
   return TEMPLATE_ICONS[icon ?? "file"] ?? TEMPLATE_ICONS.file;

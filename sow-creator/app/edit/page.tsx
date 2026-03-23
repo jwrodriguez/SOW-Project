@@ -1,3 +1,14 @@
+/**
+ * SOW Editor. Full WYSIWYG-style editor.
+ *
+ * Layout: sidebar section nav | ribbon toolbar | document canvas
+ *
+ * Key concepts:
+ *   - SectionNode tree: recursive nested sections with numbering.
+ *   - Blanks: {{field_id}} tokens in content, rendered as colored chips.
+ *   - DnD: @dnd-kit for reordering sections in both nav and document.
+ *   - Suspense wrapper at bottom, required by Next.js for useSearchParams().
+ */
 "use client";
 
 import React, { Suspense, useMemo, useState, useCallback, useRef } from "react";

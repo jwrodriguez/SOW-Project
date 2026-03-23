@@ -1,3 +1,12 @@
+/**
+ * Database Schema: all tables in one place.
+ *
+ * Two groups:
+ *   1. Auth tables (user, session, account, verification), required by Better Auth.
+ *   2. App tables (sow, template, template_share).
+ *
+ * All PKs use Postgres-native gen_random_uuid().
+ */
 import { relations, sql } from "drizzle-orm";
 import {
   pgTable,
@@ -9,7 +18,7 @@ import {
   index,
 } from "drizzle-orm/pg-core";
 
-// ─── Better Auth Core Tables ────────────────────────────────────────────────
+// ─── Auth Tables (Better Auth) ──────────────────────────────────────────────
 
 export const user = pgTable("user", {
   id: uuid("id")
@@ -24,6 +33,7 @@ export const user = pgTable("user", {
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
+  // Custom field. `input: false` in auth.ts prevents users from self-assigning roles.
   role: text("role").default("USER"),
 });
 
@@ -49,6 +59,8 @@ export const session = pgTable(
   (table) => [index("session_userId_idx").on(table.userId)],
 );
 
+// Links users to auth providers (email/password, Microsoft SSO, etc.).
+// One row per provider so a user can have multiple sign-in methods.
 export const account = pgTable(
   "account",
   {
@@ -117,8 +129,9 @@ export const accountRelations = relations(account, ({ one }) => ({
   }),
 }));
 
-// ─── Application Tables ─────────────────────────────────────────────────────
+// ─── Application Tables ────────────────────────────────────────────────────
 
+// Full editor state (sections, blanks, cover page, etc.) stored as JSONB.
 export const sows = pgTable("sow", {
   id: uuid("id").defaultRandom().primaryKey(),
   title: text("title").notNull(),
@@ -131,6 +144,8 @@ export const sows = pgTable("sow", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Reusable starting points for SOWs. `icon` and `color` reference
+// the design token registry in lib/template-styles.ts.
 export const templates = pgTable("template", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
@@ -147,6 +162,8 @@ export const templates = pgTable("template", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
+// Per-user sharing. `isShared` on template = global visibility;
+// rows here = explicit access for specific users.
 export const templateShares = pgTable("template_share", {
   id: uuid("id").defaultRandom().primaryKey(),
   templateId: uuid("template_id")
@@ -189,5 +206,5 @@ export const templateSharesRelations = relations(
   }),
 );
 
-// Keep backward-compatible alias
+// Better Auth uses singular `user`, some of our code uses `users`.
 export const users = user;

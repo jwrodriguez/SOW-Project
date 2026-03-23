@@ -1,3 +1,6 @@
+// Base Templates. Browse all pre-approved SOW templates.
+// Supports search, tag filtering, sorting, and grid/list toggle.
+// Data from mock-templates.ts. Swap for API calls when DB is ready.
 "use client";
 
 import * as React from "react";
@@ -25,17 +28,20 @@ export default function BaseTemplatesPage() {
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
 
+  // Collect unique tags from all templates for the filter dropdown.
   const availableTags = React.useMemo(() => {
     const tagSet = new Set<string>();
     mockTemplates.forEach((t) => t.tags?.forEach((tag) => tagSet.add(tag)));
     return Array.from(tagSet).sort();
   }, []);
 
+  // Simulate a brief loading state for skeleton placeholders.
   React.useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 500);
     return () => clearTimeout(timer);
   }, []);
 
+  // Filtering + sorting pipeline. Runs whenever search, tags, or sort change.
   const filteredTemplates = React.useMemo(() => {
     let result = [...mockTemplates];
 
@@ -82,6 +88,7 @@ export default function BaseTemplatesPage() {
     router.push(`/edit?template=${template.id}`);
   }
 
+  // Swap between TemplateGrid and TemplateList based on user preference.
   const ViewComponent = viewMode === "grid" ? TemplateGrid : TemplateList;
 
   return (
