@@ -1,28 +1,11 @@
 import { AppSidebar } from "@/components/app-sidebar";
-import {
-  SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
-} from "@/components/ui/sidebar";
-import {
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
-import {
-  BookOpen,
-  User,
-  ShieldCheck,
-  FileText,
-  Lock,
-  Download,
-  LayoutTemplate,
-  ChevronRight,
-  Server,
-} from "lucide-react";
+import {SidebarInset, SidebarProvider, SidebarTrigger} from "@/components/ui/sidebar";
+import {Card, CardContent, CardHeader, CardTitle} from "@/components/ui/card";
+import {BookOpen, User, ShieldCheck, FileText, Lock, Download, LayoutTemplate, ChevronRight, Server} from "lucide-react";
 
-// ── Section data ──────────────────────────────────────────────────────────────
+// Documentation sections defined as a data array.
+// Each entry has an id (for anchor linking), an icon component, a title, and JSX content.
+// Adding a new section only requires adding a new object here — no changes to the render logic.
 const sections = [
   {
     id: "overview",
@@ -340,7 +323,9 @@ const sections = [
   },
 ];
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// Renders each documentation section as a Card.
+// The sections array above drives the entire page — no render logic needs to change
+// when content is added or updated.
 export default function DocsPage() {
   return (
     <SidebarProvider>
@@ -363,6 +348,7 @@ export default function DocsPage() {
               </p>
             </div>
 
+            {/* Map sections array to Cards — id prop enables anchor link navigation */}
             {sections.map((section) => (
               <Card key={section.id} id={section.id}>
                 <CardHeader className="pb-3">
