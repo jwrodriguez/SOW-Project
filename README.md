@@ -51,7 +51,7 @@ Then create the frontend environment file:
 
 ```bash
 cd sow-creator
-cp .env.example .env.local
+cp .env.example .env
 cd ..
 ```
 
@@ -72,6 +72,7 @@ This starts a PostgreSQL container on port `5432` using credentials from the roo
 ### 4. Install dependencies
 
 ```bash
+cd sow-creator
 npm install
 ```
 
