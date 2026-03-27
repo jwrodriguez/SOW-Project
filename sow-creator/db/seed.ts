@@ -4,6 +4,7 @@
  * Seeds through Better Auth's signUpEmail API (not raw inserts) so
  * passwords get hashed and user + account rows are created together.
  */
+import 'dotenv/config'
 import { auth } from "../lib/auth";
 
 async function seed() {
@@ -39,6 +40,7 @@ async function seed() {
       }
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : String(error);
+      console.log(`  >  auth error message: ${message}`)
       if (message.includes("already exists") || message.includes("UNIQUE")) {
         console.log(`User ${user.email} already exists, skipping...`);
       } else {
