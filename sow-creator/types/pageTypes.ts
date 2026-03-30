@@ -79,7 +79,7 @@ export type HeaderFooterData = {
   footerCenter: string;
   footerRight: string;
   showPageNumbers: boolean;
-  pageNumberPosition: "footer-center" | "footer-right" | "header-right";
+  pageNumberPosition: "footer-center" | "footer-right" | "footer-left";
 };
 
 /**
