@@ -3,19 +3,14 @@
 import * as React from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "@/components/ui/card";
+import {Card, CardContent, CardDescription, CardHeader, CardTitle} from "@/components/ui/card";
 import { Search, Copy, Check, FileText } from "lucide-react";
 
-// ── Mock clause data ──────────────────────────────────────────────────────────
-// Based on project scope: pre-approved contract language engineers can reference
-// while writing SOWs. Categories match the typical sections in a SOW.
+// Static mock data — pre-approved contract language organized by SOW section category.
+// In production this would be fetched from the PostgreSQL database.
+// Categories match the standard sections in a Tinker AFB SOW.
 
+// Each clause has an id, category (for filtering), title (for display), and content (the actual contract language to copy).
 const mockClauses = [
   // Scope
   {
@@ -108,14 +103,16 @@ const mockClauses = [
   },
 ];
 
+// Extract unique categories from the mock clauses for the category filter buttons.
 const categories = Array.from(new Set(mockClauses.map((c) => c.category)));
 
-// ── Component ─────────────────────────────────────────────────────────────────
+// Main page component for the Clause Library. Displays a searchable, filterable list of pre-approved contract clauses that users can click to copy.
 export default function ClauseLibraryPage() {
   const [search, setSearch] = React.useState("");
   const [activeCategory, setActiveCategory] = React.useState<string>("All");
   const [copiedId, setCopiedId] = React.useState<string | null>(null);
 
+  // Filter clauses based on search term and active category. Search matches against title, content, and category fields.
   const filtered = React.useMemo(() => {
     return mockClauses.filter((c) => {
       const matchesSearch =
@@ -129,7 +126,7 @@ export default function ClauseLibraryPage() {
     });
   }, [search, activeCategory]);
 
-  // Group filtered clauses by category for display
+  // Group filtered clauses by category for display, creating a Map where the key is the category and the value is an array of clauses in that category.
   const grouped = React.useMemo(() => {
     const map = new Map<string, typeof mockClauses>();
     filtered.forEach((c) => {
@@ -139,6 +136,8 @@ export default function ClauseLibraryPage() {
     return map;
   }, [filtered]);
 
+  // Copies clause text to the clipboard and shows a brief checkmark for 2 seconds to confirm the action. 
+  // Uses the Clipboard API to write text to the user's clipboard.
   function handleCopy(clause: (typeof mockClauses)[0]) {
     navigator.clipboard.writeText(clause.content);
     setCopiedId(clause.id);
@@ -184,7 +183,7 @@ export default function ClauseLibraryPage() {
         </div>
       </div>
 
-      {/* Clause groups */}
+      {/* Empty state — shown when no clauses match the current search/filter */}
       {filtered.length === 0 ? (
         <div className="flex flex-col items-center justify-center py-16 text-center">
           <FileText className="h-8 w-8 text-muted-foreground mb-3" />
@@ -194,6 +193,7 @@ export default function ClauseLibraryPage() {
           </p>
         </div>
       ) : (
+        // Render each category group with its clauses in a responsive 2-column grid
         <div className="space-y-8">
           {Array.from(grouped.entries()).map(([category, clauses]) => (
             <div key={category}>

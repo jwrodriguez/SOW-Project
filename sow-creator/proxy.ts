@@ -1,24 +1,30 @@
-import { auth } from "@/auth";
+/**
+ * Auth middleware. Redirects unauthenticated users to /login,
+ * and authenticated users away from /login. Auth API routes pass through.
+ *
+ * Checks two cookie names because HTTPS prefixes with `__Secure-`.
+ */
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 
 export async function proxy(req: NextRequest) {
-  const session = await auth();
-  const isLoggedIn = !!session;
+  const sessionCookie =
+    req.cookies.get("better-auth.session_token") ||
+    req.cookies.get("__Secure-better-auth.session_token");
+
+  const isLoggedIn = !!sessionCookie;
   const isOnLoginPage = req.nextUrl.pathname.startsWith("/login");
   const isAuthRoute = req.nextUrl.pathname.startsWith("/api/auth");
 
-  // Allow auth API routes to pass through
+  // Let Better Auth handle its own routes.
   if (isAuthRoute) {
     return NextResponse.next();
   }
 
-  // If not logged in and not on login page, redirect to login
   if (!isLoggedIn && !isOnLoginPage) {
     return NextResponse.redirect(new URL("/login", req.nextUrl));
   }
 
-  // If logged in and on login page, redirect to home
   if (isLoggedIn && isOnLoginPage) {
     return NextResponse.redirect(new URL("/", req.nextUrl));
   }
@@ -28,7 +34,6 @@ export async function proxy(req: NextRequest) {
 
 export const config = {
   matcher: [
-    // match paths except for static files or whatever branding and stuff
     "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)",
   ],
 };

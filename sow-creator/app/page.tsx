@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useSession } from "@/lib/auth-client";
 import { AppSidebar } from "@/components/app-sidebar";
 import { Button } from "@/components/ui/button";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -11,10 +11,12 @@ import { mockTemplates } from "@/lib/mock-templates";
 import { FilePlus, LayoutTemplate, ArrowRight, BookOpen, ClipboardCheck } from "lucide-react";
 import type { Template } from "@/components/template-card";
 
+// For the dashboard, we show a curated list of recent templates and key actions to get users started.
 const recentTemplates = [...mockTemplates]
   .sort((a, b) => b.updatedAt.getTime() - a.updatedAt.getTime())
   .slice(0, 3);
 
+// Action tiles for the top of the dashboard — each has an icon, label, description, and destination URL.
 const ACTIONS = [
   { icon: LayoutTemplate, label: "Browse Templates", description: "Find a pre-approved template", href: "/templates/base", primary: true  },
   { icon: FilePlus,        label: "Blank SOW",        description: "Start from scratch",           href: "/new",                  primary: false },
@@ -22,6 +24,7 @@ const ACTIONS = [
   { icon: BookOpen,        label: "Clause Library",   description: "Browse approved language",     href: "/resources/clauses",    primary: false },
 ];
 
+// Dashboard page for users and provides quick access to key actions and recent templates.
 export default function DashboardPage() {
   const router = useRouter();
   const { data: session } = useSession();

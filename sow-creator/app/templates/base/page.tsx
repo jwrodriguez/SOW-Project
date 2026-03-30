@@ -1,8 +1,12 @@
+// Base Templates. Browse all pre-approved SOW templates.
+// Supports search, tag filtering, sorting, and grid/list toggle.
+// Data from mock-templates.ts. Swap for API calls when DB is ready.
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useSession } from "next-auth/react";
+import { useSession } from "@/lib/auth-client";
 import { TemplateGrid } from "@/components/template-grid";
 import { TemplateList } from "@/components/template-list";
 import {
@@ -17,24 +21,27 @@ import type { Template } from "@/components/template-card";
 
 export default function BaseTemplatesPage() {
   const router = useRouter();
-  const { data: session } = useSession();
+  const { data: sessionData } = useSession();
   const { viewMode, setViewMode } = useViewMode();
   const [searchQuery, setSearchQuery] = React.useState("");
   const [sortBy, setSortBy] = React.useState<SortOption>("date");
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [isLoading, setIsLoading] = React.useState(true);
 
+  // Collect unique tags from all templates for the filter dropdown.
   const availableTags = React.useMemo(() => {
     const tagSet = new Set<string>();
     mockTemplates.forEach((t) => t.tags?.forEach((tag) => tagSet.add(tag)));
     return Array.from(tagSet).sort();
   }, []);
 
+  // Simulate a brief loading state for skeleton placeholders.
   React.useEffect(() => {
     const timer = setTimeout(() => setIsLoading(false), 500);
     return () => clearTimeout(timer);
   }, []);
 
+  // Filtering + sorting pipeline. Runs whenever search, tags, or sort change.
   const filteredTemplates = React.useMemo(() => {
     let result = [...mockTemplates];
 
@@ -81,6 +88,7 @@ export default function BaseTemplatesPage() {
     router.push(`/edit?template=${template.id}`);
   }
 
+  // Swap between TemplateGrid and TemplateList based on user preference.
   const ViewComponent = viewMode === "grid" ? TemplateGrid : TemplateList;
 
   return (
@@ -113,7 +121,7 @@ export default function BaseTemplatesPage() {
       <ViewComponent
         templates={filteredTemplates}
         isLoading={isLoading}
-        currentUserId={session?.user?.id}
+        currentUserId={sessionData?.user?.id}
         emptyMessage="No templates found"
         emptyDescription="Try adjusting your search or create a new template."
         onUse={handleUseTemplate}

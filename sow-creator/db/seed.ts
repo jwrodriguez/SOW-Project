@@ -1,31 +1,51 @@
-import { db } from "./index";
-import { users } from "./schema";
+/**
+ * Seed script: `npx tsx db/seed.ts`
+ *
+ * Seeds through Better Auth's signUpEmail API (not raw inserts) so
+ * passwords get hashed and user + account rows are created together.
+ */
+import 'dotenv/config'
+import { auth } from "../lib/auth";
 
 async function seed() {
   console.log("Seeding database...\n");
 
-  // Create test users
   const testUsers = [
     {
       name: "Admin User",
       email: "admin@sowizard.mil",
-      passwordHash: "password123", // Plain text for now (no hashing yet)
+      password: "password123",
       role: "ADMIN",
     },
     {
       name: "John Doe",
       email: "user@sowizard.mil",
-      passwordHash: "password123",
+      password: "password123",
       role: "USER",
     },
   ];
 
   for (const user of testUsers) {
     try {
-      await db.insert(users).values(user).onConflictDoNothing();
-      console.log(`Created user: ${user.email}`);
-    } catch (error) {
-      console.log(`User ${user.email} may already exist, skipping...`);
+      const result = await auth.api.signUpEmail({
+        body: {
+          name: user.name,
+          email: user.email,
+          password: user.password,
+        },
+      });
+
+      if (result?.user) {
+        console.log(`Created user: ${user.email}`);
+      }
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.log(`  >  auth error message: ${message}`)
+      if (message.includes("already exists") || message.includes("UNIQUE")) {
+        console.log(`User ${user.email} already exists, skipping...`);
+      } else {
+        console.log(`Error creating ${user.email}: ${message}`);
+      }
     }
   }
 

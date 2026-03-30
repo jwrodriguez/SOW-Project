@@ -39,7 +39,25 @@ git clone https://github.com/your-repo/SOW-Project.git
 cd SOW-Project
 ```
 
-### 2. Start the database
+### 2. Set up environment variables
+
+Create the root `.env` file with PostgreSQL credentials (used by Docker):
+
+```bash
+cp .env.example .env
+```
+
+Then create the frontend environment file:
+
+```bash
+cd sow-creator
+cp .env.example .env
+cd ..
+```
+
+Both `.env.example` files contain default values that work out of the box for local development.
+
+### 3. Start the database
 
 The PostgreSQL database runs in Docker:
 
@@ -47,24 +65,14 @@ The PostgreSQL database runs in Docker:
 docker-compose up -d db
 ```
 
-This starts a PostgreSQL container on port `5432` using credentials from `.env`.
+This starts a PostgreSQL container on port `5432` using credentials from the root `.env`.
 
-### 3. Set up environment variables
-
-Navigate to the frontend and create your local environment file:
-
-```bash
-cd sow-creator
-cp .env.example .env.local
-```
-
-The `.env.example` file contains all required variables with default values that work out of the box for local development.
-
-> **Note:** `AUTH_SECRET` is required by NextAuth but for local development, any random string works fine. A secure cryptographic key is only necessary for production.
+> **Note:** `BETTER_AUTH_SECRET` is required by Better Auth. For local development, any random string works fine. Generate a secure key for production with `openssl rand -base64 32`.
 
 ### 4. Install dependencies
 
 ```bash
+cd sow-creator
 npm install
 ```
 
@@ -105,9 +113,11 @@ The app will be available at **http://localhost:3000**
 
 ```bash
 # From project root
+cp .env.example .env
 docker-compose up -d db
 
 cd sow-creator
+cp .env.example .env.local
 npm install
 npx drizzle-kit push
 npx tsx db/seed.ts

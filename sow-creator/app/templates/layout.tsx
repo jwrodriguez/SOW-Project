@@ -1,3 +1,4 @@
+// Shared layout for /templates/*. Provides sidebar + breadcrumb chrome.
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -17,7 +18,7 @@ import {
   BreadcrumbSeparator,
 } from "@/components/ui/breadcrumb";
 
-
+// Maps URL paths to human-readable page titles for the breadcrumb.
 const pageTitles: Record<string, string> = {
   "/templates": "Templates",
   "/templates/base": "Base Templates",

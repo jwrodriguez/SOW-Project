@@ -1,3 +1,5 @@
+// Sidebar nav with collapsible sub-items.
+// Parent highlights if pathname matches it or any child.
 "use client";
 
 import { usePathname } from "next/navigation";
@@ -39,6 +41,7 @@ export function NavMain({
     <SidebarGroup>
       <SidebarMenu>
         {items.map((item) => {
+          // Highlight the parent if we're on its page or any child page.
           const isParentActive =
             pathname === item.url ||
             item.items?.some((sub) => pathname === sub.url);

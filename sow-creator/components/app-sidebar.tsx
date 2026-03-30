@@ -1,7 +1,9 @@
+// App sidebar. Data-driven nav (add routes in navData).
+// Footer shows session user info with a loading skeleton.
 "use client";
 
 import * as React from "react";
-import { useSession } from "next-auth/react";
+import { useSession } from "@/lib/auth-client";
 import {
   BookOpen,
   Plane,
@@ -25,6 +27,8 @@ import {
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
 
+// Navigation data. Adding a new page is as simple as appending an object.
+// `isActive` controls whether the collapsible section starts expanded.
 const navData = {
   navMain: [
     {
@@ -71,13 +75,15 @@ const navData = {
 };
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { data: session, status } = useSession();
+  const { data: sessionData, isPending } = useSession();
 
-  const user = session?.user
+  // Build user object from session, or null while loading/unauthenticated.
+  // The footer conditionally renders: skeleton -> user info -> nothing.
+  const user = sessionData?.user
     ? {
-        name: session.user.name ?? "User",
-        email: session.user.email ?? "",
-        avatar: session.user.image ?? "",
+        name: sessionData.user.name ?? "User",
+        email: sessionData.user.email ?? "",
+        avatar: sessionData.user.image ?? "",
       }
     : null;
 
@@ -111,7 +117,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
 
       <SidebarFooter>
-        {status === "loading" ? (
+        {isPending ? (
           <div className="flex items-center gap-2 p-2">
             <Skeleton className="h-8 w-8 rounded-lg" />
             <div className="flex-1 space-y-1">
