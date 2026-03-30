@@ -22,10 +22,12 @@ module.exports = {
 },
 moduleNameMapper: {
   "^@/(.*)$": "<rootDir>/$1",
+  "^better-auth/react$": "<rootDir>/__mocks__/better-auth-react.js",
   "next-auth/react": "<rootDir>/__mocks__/next-auth-react.js",
   "next/navigation": "<rootDir>/__mocks__/next-navigation.js"
 },
 transformIgnorePatterns: [
-  "node_modules/(?!(next-auth|next)/)"
+  "node_modules/(?!(next-auth|next)/)",
+  "node_modules/(?!better-auth)"
 ],
 };

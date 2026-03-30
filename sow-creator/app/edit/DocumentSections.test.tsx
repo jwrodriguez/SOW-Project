@@ -1,6 +1,6 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import "@testing-library/jest-dom";
-import { DocumentPage, SectionBlock } from "./page";
+import { DocumentPage, SortableSectionBlock } from "./page";
 import { HeaderFooterData, SectionNode } from "@/types/pageTypes";
 
 const createMockHF = (): HeaderFooterData => ({
@@ -32,6 +32,18 @@ describe("DocumentPage", () => {
     expect(screen.getByText("Footer left")).toBeInTheDocument();
     expect(screen.getByText("Footer center")).toBeInTheDocument();
     expect(screen.getByText("Footer right")).toBeInTheDocument();
+  });
+
+  it("applies the expected text alignment classes to footer sections", () => {
+    render(<DocumentPage hf={mockHF} onHF={onHF} pageNumber={0} children/>);
+
+    const footerLeft = screen.getByText("Footer left").closest("div");
+    const footerCenter = screen.getByText("Footer center").closest("div");
+    const footerRight = screen.getByText("Footer right").closest("div");
+
+    expect(footerLeft).toHaveClass("text-left");
+    expect(footerCenter).toHaveClass("text-center");
+    expect(footerRight).toHaveClass("text-right");
   });
 
   it("renders children content inside the page body", () => {
@@ -80,7 +92,7 @@ describe("DocumentPage", () => {
   });
 });
 
-describe("SectionBlock", () => {
+describe("SortableSectionBlock", () => {
   let section: SectionNode;
   let onUpdate: jest.Mock;
   let onAddChild: jest.Mock;
@@ -89,6 +101,10 @@ describe("SectionBlock", () => {
   let onAddTable: jest.Mock;
   let onDeleteTable: jest.Mock;
   let onUpdateCell: jest.Mock;
+  let onSelect: jest.Mock;
+  let onToggleLock: jest.Mock;
+  let onClickBlank: jest.Mock;
+  let onDeleteBlank: jest.Mock;
 
   beforeEach(() => {
     section = {
@@ -96,6 +112,7 @@ describe("SectionBlock", () => {
       number: "1.0",
       title: "Project Overview",
       content: "This is the section content.",
+      locked: false,
       tables: [],
       children: []
     };
@@ -107,21 +124,31 @@ describe("SectionBlock", () => {
     onAddTable = jest.fn();
     onDeleteTable = jest.fn();
     onUpdateCell = jest.fn();
+    onSelect = jest.fn();
+    onToggleLock = jest.fn();
+    onClickBlank = jest.fn();
+    onDeleteBlank = jest.fn();
   });
 
   it("renders section number, title, and content", () => {
     render(
-      <SectionBlock
+      <SortableSectionBlock
         section={section}
         depth={0}
         isOnlyTop={false}
+        isSelected={false}
+        fields={[]}
+        onSelect={onSelect}
         onUpdate={onUpdate}
         onAddChild={onAddChild}
         onAddSibling={onAddSibling}
         onDelete={onDelete}
+        onToggleLock={onToggleLock}
         onAddTable={onAddTable}
         onDeleteTable={onDeleteTable}
         onUpdateCell={onUpdateCell}
+        onClickBlank={onClickBlank}
+        onDeleteBlank={onDeleteBlank}
       />
     );
 
@@ -132,17 +159,23 @@ describe("SectionBlock", () => {
 
   it("reveals the hover toolbar and calls add child, add sibling, and delete callbacks", () => {
     render(
-      <SectionBlock
+      <SortableSectionBlock
         section={section}
         depth={0}
         isOnlyTop={false}
+        isSelected={false}
+        fields={[]}
+        onSelect={onSelect}
         onUpdate={onUpdate}
         onAddChild={onAddChild}
         onAddSibling={onAddSibling}
         onDelete={onDelete}
+        onToggleLock={onToggleLock}
         onAddTable={onAddTable}
         onDeleteTable={onDeleteTable}
         onUpdateCell={onUpdateCell}
+        onClickBlank={onClickBlank}
+        onDeleteBlank={onDeleteBlank}
       />
     );
 
@@ -161,17 +194,23 @@ describe("SectionBlock", () => {
 
   it("opens the add table form and calls onAddTable with default row and column values", () => {
     render(
-      <SectionBlock
+      <SortableSectionBlock
         section={section}
         depth={0}
         isOnlyTop={false}
+        isSelected={false}
+        fields={[]}
+        onSelect={onSelect}
         onUpdate={onUpdate}
         onAddChild={onAddChild}
         onAddSibling={onAddSibling}
         onDelete={onDelete}
+        onToggleLock={onToggleLock}
         onAddTable={onAddTable}
         onDeleteTable={onDeleteTable}
         onUpdateCell={onUpdateCell}
+        onClickBlank={onClickBlank}
+        onDeleteBlank={onDeleteBlank}
       />
     );
 

@@ -56,7 +56,7 @@ type CoverPageData = {
 type HeaderFooterData = {
   headerLeft: string; headerCenter: string; headerRight: string;
   footerLeft: string; footerCenter: string; footerRight: string;
-  showPageNumbers: boolean; pageNumberPosition: "footer-center" | "footer-right" | "header-right";
+  showPageNumbers: boolean; pageNumberPosition: "footer-center" | "footer-right" | "footer-left";
 };
 type TemplateData = {
   documentName: string; fields: TemplateField[];
@@ -141,7 +141,7 @@ export function EditableArea({ value, onChange, className = "", placeholder = "C
   onChange: (v: string) => void;
   className?: string;
   placeholder?: string;
-  string; disabled?: boolean;
+  disabled?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   if (disabled) return (
@@ -283,7 +283,7 @@ function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, 
  * 
  * @returns A JSX Element component serving as a template/design for a specific page of the document with editable header footer areas
  */
-function DocumentPage({ hf, onHF, pageNumber, children }: {
+export function DocumentPage({ hf, onHF, pageNumber, children }: {
   hf: HeaderFooterData; onHF: (k: keyof HeaderFooterData, v: string) => void; pageNumber: number; children: React.ReactNode;
 }) {
   return (
@@ -332,7 +332,7 @@ function DocumentPage({ hf, onHF, pageNumber, children }: {
  * @param children Existing subsections and subtables of a particular section block in the document are fed into this parameter 
  * @returns A JSX Section Block Component
  */
-function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fields,
+export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fields,
   onSelect, onUpdate, onAddChild, onAddSibling, onDelete, onToggleLock,
   onAddTable, onDeleteTable, onUpdateCell, onClickBlank, onDeleteBlank, children }: {
   section: SectionNode; depth: number; isOnlyTop: boolean; isSelected: boolean;

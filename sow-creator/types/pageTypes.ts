@@ -5,17 +5,19 @@
  * - `number`: Number indicating the section block's position in the document
  * - `title`: Formal title of the section block
  * - `content`: Formal description of the section block
+ * - `locked`: boolean value indicating whether the section block is locked from editing
  * - `tables`: List of tables associated with the document section block
  * - `children`: List of subsections associated with the document section block
  */
-export type SectionNode = { 
-    id: string;
-    number: string; 
-    title: string; 
-    content: string; 
-    tables?: TableData[]; 
-    children: SectionNode[]
- };
+export type SectionNode = {
+  id: string;
+  number: string;
+  title: string;
+  content: string;
+  locked: boolean;
+  tables?: TableData[];
+  children: SectionNode[];
+};
 
 
 /**
