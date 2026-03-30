@@ -90,10 +90,22 @@ function RibbonBtn({ icon: Icon, label, onClick, disabled, active, danger }: {
 }
 
 // ============= INLINE EDITING =============
-// Single-line click-to-edit field. When disabled (section locked), renders as plain text.
-// When enabled, clicking swaps the display div for an <input>. Enter or blur confirms.
-function EditableText({ value, onChange, className = "", placeholder = "Click to edit", disabled }: {
-  value: string; onChange: (v: string) => void; className?: string; placeholder?: string; disabled?: boolean;
+/**
+ * Single-line click-to-edit field. When disabled (section locked), renders as plain text. When enabled, clicking swaps the display div for an <input>. Enter or blur confirms.
+ * @param value The text content to display/edit
+ * @param onChange Callback when text changes, recieves updated string value
+ * @param className Optional additional class names for styling
+ * @param placeholder Placeholder text when value is empty
+ * @param disabled Boolean value indicating whether the text is open for editing or locked
+ * 
+ * @returns A JSX element that displays text and allows inline editing on click, with support for different input types and customizable styling. When the value is empty, it shows a placeholder to prompt the user to add content.
+ */
+export function EditableText({ value, onChange, className = "", placeholder = "Click to edit", disabled }: {
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+  placeholder?: string;
+  disabled?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   if (disabled) return (
@@ -113,10 +125,23 @@ function EditableText({ value, onChange, className = "", placeholder = "Click to
   );
 }
 
-// Multi-line click-to-edit field. Same disabled/enabled pattern as EditableText
-// but uses a <textarea>. Row height auto-adjusts based on newline count in the content.
-function EditableArea({ value, onChange, className = "", placeholder = "Click to add content...", disabled }: {
-  value: string; onChange: (v: string) => void; className?: string; placeholder?: string; disabled?: boolean;
+/**
+ * Multi-line click-to-edit field. Same disabled/enabled pattern as EditableText but uses a <textarea>. Row height auto-adjusts based on newline count in the content.
+ * @param value The text content to display/edit
+ * @param onChange Callback when text changes, recieves updated string value 
+ * @param className Optional additional class names for styling
+ * @param placeholder Placeholder text when value is empty
+ * @param disabled Boolean value determining whether the section is locked or open for editing 
+ *
+ * @returns A JSX element that displays text and allows inline editing on click
+ */
+
+export function EditableArea({ value, onChange, className = "", placeholder = "Click to add content...", disabled }: {
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+  placeholder?: string;
+  string; disabled?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
   if (disabled) return (
@@ -135,11 +160,22 @@ function EditableArea({ value, onChange, className = "", placeholder = "Click to
     </div>
   );
 }
-
-// Footer zone variant — in display mode replaces {PAGE} with the real page number.
-// In edit mode the raw {PAGE} template text is shown so users can see and modify it.
-function EditableFooterZone({ value, onChange, pageNumber, className = "", placeholder = "" }: {
-  value: string; onChange: (v: string) => void; pageNumber: number; className?: string; placeholder?: string;
+/**
+ * Editable footer zone component — similar to EditableArea but supports {PAGE} token that renders the current page number. This helps users understand how to include page numbers in their footer.
+ * @param value The text content to display/edit
+ * @param onChange Callback when text changes, recieves updated string value
+ * @param pageNumber page number input to replace {PAGE} token with in display mode
+ * @param className Optional additional class names for styling
+ * @param placeholder Placeholder text when value is empty
+ * 
+ * @returns A JSX element for editing footer text with support for dynamic page numbers via the {PAGE} token. Displays the resolved page number in display mode and shows the {PAGE} token in edit mode to clarify usage.
+ */
+export function EditableFooterZone({ value, onChange, pageNumber, className = "", placeholder = "Click to add footer content..." }: {
+  value: string;
+  onChange: (v: string) => void;
+  pageNumber: number;
+  className?: string;
+  placeholder?: string;
 }) {
   const [editing, setEditing] = useState(false);
   return editing ? (
@@ -238,8 +274,15 @@ function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, 
 }
 
 // ============= DOCUMENT PAGE WRAPPER =============
-// Renders an 8.5x11in white page with editable header and footer zones (left/center/right).
-// Children are rendered in the body area between the header and footer.
+/**
+ * Renders an 8.5x11in white page with editable header and footer zones (left/center/right). Children are rendered in the body area between the header and footer.
+ * @param hf The Header and Footer Data to be imported into the reusable page wrapper
+ * @param onHF setter function that updates a designated section of content in the HeaderFooterData object
+ * @param pageNumber The designated number of the page to be generated in the open document
+ * @param children Document body content to be imported into the page wrapper
+ * 
+ * @returns A JSX Element component serving as a template/design for a specific page of the document with editable header footer areas
+ */
 function DocumentPage({ hf, onHF, pageNumber, children }: {
   hf: HeaderFooterData; onHF: (k: keyof HeaderFooterData, v: string) => void; pageNumber: number; children: React.ReactNode;
 }) {
@@ -255,9 +298,15 @@ function DocumentPage({ hf, onHF, pageNumber, children }: {
       <div style={{ padding: "0.1in 1in", flex: 1 }}>{children}</div>
       <div style={{ padding: "0.1in 1in 0.5in 1in" }}>
         <div className="grid grid-cols-3 gap-1 text-gray-700">
-          <EditableFooterZone value={hf.footerLeft} onChange={v => onHF("footerLeft", v)} pageNumber={pageNumber} placeholder="Footer left" />
-          <EditableFooterZone value={hf.footerCenter} onChange={v => onHF("footerCenter", v)} pageNumber={pageNumber} className="text-center" placeholder="Footer center" />
-          <EditableFooterZone value={hf.footerRight} onChange={v => onHF("footerRight", v)} pageNumber={pageNumber} className="text-right" placeholder="Page {PAGE}" />
+          {(hf.showPageNumbers && hf.pageNumberPosition === "footer-left") ? (
+              <EditableFooterZone value={hf.footerLeft} onChange={v => onHF("footerLeft", v)} pageNumber={pageNumber} className="text-left" placeholder="Page {PAGE}" />
+          ): <EditableFooterZone value={hf.footerLeft} onChange={v => onHF("footerLeft", v)} pageNumber={pageNumber} className="text-left" placeholder="Footer left" />}
+          {(hf.showPageNumbers && hf.pageNumberPosition === "footer-center") ? (
+              <EditableFooterZone value={hf.footerCenter} onChange={v => onHF("footerCenter", v)} pageNumber={pageNumber} className="text-center" placeholder="Page {PAGE}" />
+          ): <EditableFooterZone value={hf.footerCenter} onChange={v => onHF("footerCenter", v)} pageNumber={pageNumber} className="text-center" placeholder="Footer center" />}
+          {(hf.showPageNumbers && hf.pageNumberPosition === "footer-right") ? (
+              <EditableFooterZone value={hf.footerRight} onChange={v => onHF("footerRight", v)} pageNumber={pageNumber} className="text-right" placeholder="Page {PAGE}" />
+          ): <EditableFooterZone value={hf.footerRight} onChange={v => onHF("footerRight", v)} pageNumber={pageNumber} className="text-right" placeholder="Footer right" />}
         </div>
       </div>
     </div>
@@ -269,6 +318,20 @@ function DocumentPage({ hf, onHF, pageNumber, children }: {
 // useSortable provides the ref, drag listeners, and transform/transition for the drag animation.
 // isSelected adds a highlight ring. locked controls whether content is editable.
 // Hover toolbar exposes lock/unlock, add sub, add sibling, add table, and delete.
+/**
+ * @param section Section segment to be rendered into the document
+ * @param depth Numerical value indicating placement of section in the document
+ * @param isOnlyTop Boolean value indicating whether a section block resides at the topmost layer of the document
+ * @param onUpdate Convert content of section to be editable
+ * @param onAddChild Add a subsection to the section block in the document
+ * @param onAddSibling Add a section block of the same depth to the document
+ * @param onDelete Deletion function removing the section block from the document
+ * @param onAddTable Setter function adding a table object to section of the document. This is done with a (row, column) input
+ * @param onDeleteTable Deletion function removing a table object from section of the document
+ * @param onUpdateCell Setter function updating a cell value of a given table for a section block in the document
+ * @param children Existing subsections and subtables of a particular section block in the document are fed into this parameter 
+ * @returns A JSX Section Block Component
+ */
 function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fields,
   onSelect, onUpdate, onAddChild, onAddSibling, onDelete, onToggleLock,
   onAddTable, onDeleteTable, onUpdateCell, onClickBlank, onDeleteBlank, children }: {
