@@ -1,13 +1,5 @@
 "use client";
 
-// ─── TODO: Role guard — your teammate should add this block ──────────────────
-// import { useSession } from "@/lib/auth-client";
-// import { useRouter } from "next/navigation";
-// const { data: session } = useSession();
-// const router = useRouter();
-// if (session && session.user.role !== "ADMIN") router.push("/");
-// ────────────────────────────────────────────────────────────────────────────
-
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
