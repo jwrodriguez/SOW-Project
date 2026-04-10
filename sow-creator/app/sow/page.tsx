@@ -36,7 +36,26 @@ const DEFAULT_TEMPLATE: TemplateData = {
     showPageNumbers: true,
     pageNumberPosition: "footer-right",
   },
-  sections: [],
+  sections: [
+        { id: "sec-1", number: "1.0", title: "Scope of Work", content: "", locked: true, tables: [],
+          children: [
+            { id: "sec-1-1", number: "1.1", title: "Scope", content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {YOUR PRODUCT}. The contractor should {do these things} and {provide this service}.", locked: false, tables: [], children: [] },
+            { id: "sec-1-2", number: "1.2", title: "Background", content: "The {items to be purchased} are intended to be used at {a location} for {a purpose}. {the items} shoud be delivered to {a location} ", locked: false, tables: [], children: [] },
+          ]
+        },
+        { id: "sec-2", number: "2.0", title: "Applicable Standards", content: "Contractor, at a minimum, is required to comply with the current editions of the following requirements for design, construction, installation, and safety as applicable. The term “most recent edition” shall be understood to mean “most recently released edition as of date of issuance of contract.” ", locked: true, tables: [],
+          children: [
+            { id: "sec-2-1", number: "2.1", title: "Government Standards", content: "The following documents form a part of this purchase description to the extent stipulated herein.", locked: true, tables: [], children: [] },
+            { id: "sec-2-2", number: "2.2", title: "Non-Government Standards", content: "The following documents form a part of this document to the extent stipulated herein. ", locked: true, tables: [], children: [] },
+            { id: "sec-2-3", number: "2.3", title: "Order of Precedence", content: "", locked: true, tables: [], children: [] },
+            { id: "sec-2-4", number: "2.4", title: "Applicable Standards", content: "", locked: true, tables: [], children: [] },
+            { id: "sec-2-5", number: "2.5", title: "Prohibited Materials", content: "", locked: true, tables: [], children: [] },
+            { id: "sec-2-6", number: "2.6", title: "Environmental Protection", content: "Under the operating, service, transportation and storage conditions described herein the machine shall not emit materials hazardous to the ecological system as prohibited by federal, state or local statutes in effect at the point of installation. ", locked: true, tables: [], children: [] },
+          ]
+        },
+        { id: "sec-3", number: "3.0", title: "Written Submittals", content: "", locked: true, tables: [], children: [] },
+        { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "", locked: true, tables: [], children: [] },
+      ],
 };
 
 // ─── TOC generator ───────────────────────────────────────────────────────────
@@ -288,7 +307,16 @@ function SowEngineerPageInner() {
         // fall through to default
       }
     }
+    
+    const saved = localStorage.getItem("current_draft");
+    if (saved) {
+      try {
+        return JSON.parse(saved) as TemplateData;
+
+      } catch { /* use defaults */ }
+    }
     return DEFAULT_TEMPLATE;
+    
   }, [searchParams]);
 
   // Template structure — engineers cannot change this, only their content edits and field values
