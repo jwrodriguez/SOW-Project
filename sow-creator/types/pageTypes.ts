@@ -1,4 +1,10 @@
 // ============= PAGE.TSX TYPES =============
+// TypeScript type definitions for every data shape in the page.tsx file.
+// FieldType is the set of allowed blank field types.
+// TemplateField describes one fillable blank slot inserted into section content.
+// SectionNode is recursive — children: SectionNode[] enables nested subsections.
+// locked: boolean on SectionNode controls whether the section is editable.
+// TemplateData is the top-level document object that gets serialized to JSON on Save.
 
 /**
  * The seven allowed types for a fillable blank field.
