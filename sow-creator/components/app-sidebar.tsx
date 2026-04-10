@@ -45,6 +45,7 @@ const navData = {
       isActive: true,
       items: [
         { title: "Base Templates", url: "/templates/base" },
+        { title: "Template-by-Sections", url: "/sections" },
         { title: "My Templates", url: "/templates/personal" },
         { title: "Shared with Me", url: "/templates/shared" },
       ],
@@ -86,6 +87,7 @@ export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
         avatar: sessionData.user.image ?? "",
       }
     : null;
+
 
   return (
     <Sidebar variant="floating" collapsible="icon" {...props}>
