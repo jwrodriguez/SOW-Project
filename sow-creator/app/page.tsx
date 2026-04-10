@@ -17,11 +17,16 @@ const recentTemplates = [...mockTemplates]
   .slice(0, 3);
 
 // Action tiles for the top of the dashboard — each has an icon, label, description, and destination URL.
-const ACTIONS = [
+const USER_ACTIONS = [
   { icon: LayoutTemplate, label: "Browse Templates", description: "Find a pre-approved template", href: "/templates/base", primary: true  },
-  { icon: FilePlus,        label: "Blank SOW",        description: "Start from scratch",           href: "/new",                  primary: false },
   { icon: ClipboardCheck,  label: "Compliance Check", description: "Review your SOW",              href: "/resources/compliance", primary: false },
   { icon: BookOpen,        label: "Clause Library",   description: "Browse approved language",     href: "/resources/clauses",    primary: false },
+];
+// Action tiles for the top of the dashboard — each has an icon, label, description, and destination URL.
+const ADMIN_ACTIONS = [
+  { icon: FilePlus,        label: "Add Template",           description: "Create new SOW template",      href: "/new",                  primary: false },
+  { icon: ClipboardCheck,  label: "Add Compliances",        description: "Add requirements for SOWs",    href: "/resources/compliance", primary: false },
+  { icon: BookOpen,        label: "Add Clause to Library",  description: "Add approved language",        href: "/resources/clauses",    primary: false },
 ];
 
 // Dashboard page for users and provides quick access to key actions and recent templates.
@@ -29,9 +34,9 @@ export default function DashboardPage() {
   const router = useRouter();
   const { data: session } = useSession();
 
-  // PROTOTYPE: routes to /edit with default placeholder content until DB is live
-  function handleUseTemplate(t: Template) { router.push(`/edit?template=${t.id}`); }
-  function handleEditTemplate(t: Template) { router.push(`/edit?template=${t.id}`); }
+  // PROTOTYPE: routes to /sow with default placeholder content until DB is live
+  function handleUseTemplate(t: Template) { router.push(`/sow?template=${t.id}`); }
+  function handleEditTemplate(t: Template) { router.push(`/sow?template=${t.id}`); }
 
   return (
     <SidebarProvider>
@@ -47,13 +52,13 @@ export default function DashboardPage() {
           <div>
             <h2 className="text-2xl font-bold tracking-tight">Welcome to SoWizard</h2>
             <p className="text-muted-foreground mt-1 text-sm">
-              Create standardized Statements of Work for Capital Investment Equipment procurement.
+              Create standardized Statements of Work.
             </p>
           </div>
 
           {/* Quick-action tiles */}
           <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
-            {ACTIONS.map((action) => (
+            {USER_ACTIONS.map((action) => (
               <button
                 key={action.label}
                 onClick={() => router.push(action.href)}
@@ -72,7 +77,32 @@ export default function DashboardPage() {
                 </div>
               </button>
             ))}
-          </div>
+          </div> 
+
+          {/* Quick-action tiles - ADMIN  ** CONDITIONAL RENDERING ** */}
+          {session?.user.role === "ADMIN" && (
+            <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+              {ADMIN_ACTIONS.map((action) => (
+                <button
+                  key={action.label}
+                  onClick={() => router.push(action.href)}
+                  className={`flex flex-col items-start gap-3 rounded-xl border p-5 text-left transition-all hover:shadow-sm ${
+                    action.primary
+                      ? "border-primary/30 bg-primary/5 hover:border-primary/60"
+                      : "hover:border-primary/30 hover:bg-muted/40"
+                  }`}
+                >
+                  <div className={`flex h-10 w-10 items-center justify-center rounded-lg ${action.primary ? "bg-primary/10" : "bg-muted"}`}>
+                    <action.icon className={`h-5 w-5 ${action.primary ? "text-primary" : "text-muted-foreground"}`} />
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold">{action.label}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">{action.description}</p>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
 
           {/* Recent templates */}
           <div className="space-y-4">
