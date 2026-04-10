@@ -186,7 +186,15 @@ export function TemplateCard({
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <Clock className="h-3 w-3" />
               <span>{formatDate(template.updatedAt)}</span>
+              
             </div>
+            <Button
+              size="sm"
+              className="h-8 px-4 text-sm"
+              onClick={() => onUse?.(template)}
+            >
+              Use Template
+            </Button>
             {template.isShared && (
               <span className="text-[10px] font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400">
                 Shared
@@ -206,13 +214,13 @@ export function TemplateCard({
                 Edit
               </Button>
             )}
-            <Button
+            {/* <Button
               size="sm"
               className="h-8 px-4 text-sm"
               onClick={() => onUse?.(template)}
             >
               Use Template
-            </Button>
+            </Button> */}
           </div>
         </div>
       </CardContent>
