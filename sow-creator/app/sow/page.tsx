@@ -47,14 +47,14 @@ const DEFAULT_TEMPLATE: TemplateData = {
           children: [
             { id: "sec-2-1", number: "2.1", title: "Government Standards", content: "The following documents form a part of this purchase description to the extent stipulated herein.", locked: true, tables: [], children: [] },
             { id: "sec-2-2", number: "2.2", title: "Non-Government Standards", content: "The following documents form a part of this document to the extent stipulated herein. ", locked: true, tables: [], children: [] },
-            { id: "sec-2-3", number: "2.3", title: "Order of Precedence", content: "", locked: true, tables: [], children: [] },
-            { id: "sec-2-4", number: "2.4", title: "Applicable Standards", content: "", locked: true, tables: [], children: [] },
-            { id: "sec-2-5", number: "2.5", title: "Prohibited Materials", content: "", locked: true, tables: [], children: [] },
+            { id: "sec-2-3", number: "2.3", title: "Order of Precedence", content: "In the event of a conflict between the test of this specification and the references cited herein, the test of this specification takes precedence. Nothing in this document, however, supersedes applicable laws and regulations unless a specific exception has been obtained.", locked: true, tables: [], children: [] },
+            { id: "sec-2-4", number: "2.4", title: "Applicable Standards", content: "", locked: false, tables: [], children: [] },
+            { id: "sec-2-5", number: "2.5", title: "Prohibited Materials", content: "", locked: false, tables: [], children: [] },
             { id: "sec-2-6", number: "2.6", title: "Environmental Protection", content: "Under the operating, service, transportation and storage conditions described herein the machine shall not emit materials hazardous to the ecological system as prohibited by federal, state or local statutes in effect at the point of installation. ", locked: true, tables: [], children: [] },
           ]
         },
-        { id: "sec-3", number: "3.0", title: "Written Submittals", content: "", locked: true, tables: [], children: [] },
-        { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "", locked: true, tables: [], children: [] },
+        { id: "sec-3", number: "3.0", title: "Written Submittals", content: "", locked: false, tables: [], children: [] },
+        { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "", locked: false, tables: [], children: [] },
       ],
 };
 
@@ -308,13 +308,13 @@ function SowEngineerPageInner() {
       }
     }
     
-    const saved = localStorage.getItem("current_draft");
-    if (saved) {
-      try {
-        return JSON.parse(saved) as TemplateData;
+    // const saved = localStorage.getItem("current_draft");
+    // if (saved) {
+    //   try {
+    //     return JSON.parse(saved) as TemplateData;
 
-      } catch { /* use defaults */ }
-    }
+    //   } catch { /* use defaults */ }
+    // }
     return DEFAULT_TEMPLATE;
     
   }, [searchParams]);
