@@ -81,11 +81,11 @@ export default function BaseTemplatesPage() {
   // database and pass it to the editor. For now we navigate to /edit and the
   // editor loads its default placeholder document.
   function handleUseTemplate(template: Template) {
-    router.push(`/edit?template=${template.id}`);
+    router.push(`/sow?template=${template.id}`);
   }
 
   function handleEditTemplate(template: Template) {
-    router.push(`/edit?template=${template.id}`);
+    router.push(`/sow?template=${template.id}`);
   }
 
   // Swap between TemplateGrid and TemplateList based on user preference.
