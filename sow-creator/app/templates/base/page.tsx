@@ -93,17 +93,22 @@ export default function BaseTemplatesPage() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between"> {/* Top banner */}
         <div>
           <h2 className="text-2xl font-bold tracking-tight">Base Templates</h2>
           <p className="text-muted-foreground">
             Pre-approved SOW templates for common service types.
           </p>
         </div>
-        <Button onClick={() => router.push("/new")}>
-          <Plus className="mr-1 h-4 w-4" />
-          New Template
-        </Button>
+
+        {/* New template button - CONDITIONAL RENDERING */}
+        {sessionData?.user.role === "ADMIN" && (
+          <Button onClick={() => router.push("/new")}>
+            <Plus className="mr-1 h-4 w-4" />
+            New Template
+          </Button>
+        )}
+
       </div>
 
       <TemplateFilters
