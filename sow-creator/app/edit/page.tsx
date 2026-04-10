@@ -1,5 +1,5 @@
 /**
- * SOW Editor. Full WYSIWYG-style editor.
+ * SOW TEMPLATE EDITOR. Full WYSIWYG-style editor.
  *
  * Layout: sidebar section nav | ribbon toolbar | document canvas
  *
@@ -17,6 +17,9 @@ import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { useSession } from "@/lib/auth-client";
+import { useRouter } from "next/navigation";
+
 import {
   Plus, Trash2, Download, Save, FileText, ChevronRight, ChevronDown,
   ListOrdered, Edit2, Table as TableIcon, Lock, Unlock, GripVertical,
@@ -1040,9 +1043,18 @@ function SowEditPageInner() {
 
 // Suspense wrapper for useSearchParams()
 export default function SowEditPage() {
+  const { data: sessionData } = useSession();
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading editor...</div>}>
-      <SowEditPageInner />
-    </Suspense>
+    <div>
+      {/* New template button - CONDITIONAL RENDERING */}
+
+      {sessionData?.user.role !== "ADMIN" && (
+        useRouter().push("/")
+      )}
+
+      <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading editor...</div>}>
+        <SowEditPageInner />
+      </Suspense>
+    </div>
   );
 }

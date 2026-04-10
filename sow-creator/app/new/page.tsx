@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
+import { useSession } from "@/lib/auth-client";
 import {
   SidebarInset,
   SidebarProvider,
@@ -89,6 +90,7 @@ function StepIndicator({ current }: { current: 1 | 2 | 3 }) {
 }
 
 export default function NewSOWPage() {
+  const { data: sessionData } = useSession();
   const router = useRouter();
   const today = new Date().toISOString().split("T")[0];
 
@@ -137,6 +139,9 @@ export default function NewSOWPage() {
 
   return (
     <SidebarProvider>
+      {sessionData?.user.role !== "ADMIN" && (
+        useRouter().push("/")
+      )}
       <AppSidebar />
       <SidebarInset className="flex flex-col h-screen overflow-hidden">
         {/* Header */}
@@ -144,7 +149,7 @@ export default function NewSOWPage() {
           <SidebarTrigger className="-ml-1" />
           <div className="flex items-center gap-2">
             <FilePlus className="h-4 w-4 text-primary" />
-            <span className="text-sm font-semibold">New Statement of Work</span>
+            <span className="text-sm font-semibold">New Statement of Work Template</span>
           </div>
         </header>
 
@@ -155,7 +160,7 @@ export default function NewSOWPage() {
             {/* Page heading */}
             <div className="mb-6">
               <h1 className="text-2xl font-bold tracking-tight">
-                Create a New SOW
+                Create a New SOW Template
               </h1>
               <p className="text-muted-foreground mt-1 text-sm">
                 Fill in the basic project details below. Everything here
@@ -187,7 +192,7 @@ export default function NewSOWPage() {
                   {/* Document name — only required field */}
                   <div className="space-y-2">
                     <Label htmlFor="documentName">
-                      Document Name{" "}
+                      Template Name{" "}
                       <span className="text-destructive">*</span>
                     </Label>
                     <Input
@@ -198,7 +203,7 @@ export default function NewSOWPage() {
                       autoFocus
                     />
                     <p className="text-xs text-muted-foreground">
-                      This is how the document appears in your project list and
+                      This is how the template appears in the Templates list and
                       becomes the save filename.
                     </p>
                   </div>
@@ -233,7 +238,7 @@ export default function NewSOWPage() {
                     <Label htmlFor="description">Description</Label>
                     <Textarea
                       id="description"
-                      placeholder="Optional — brief summary of this SOW's purpose. Seeds the Project Overview section in the editor."
+                      placeholder="Optional — brief summary of this SOW's purpose. Copied into Section 1 - Project Overview - in the editor."
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       rows={3}
