@@ -92,6 +92,12 @@ function StepIndicator({ current }: { current: 1 | 2 | 3 }) {
 export default function NewSOWPage() {
   const { data: sessionData } = useSession();
   const router = useRouter();
+
+  //Prevent non-admins from using this page
+  if (sessionData?.user.role !== "ADMIN"){
+    useRouter().push("/");
+  }
+
   const today = new Date().toISOString().split("T")[0];
 
   // All fields that the edit page reads from the setup param
@@ -139,9 +145,6 @@ export default function NewSOWPage() {
 
   return (
     <SidebarProvider>
-      {sessionData?.user.role !== "ADMIN" && (
-        useRouter().push("/")
-      )}
       <AppSidebar />
       <SidebarInset className="flex flex-col h-screen overflow-hidden">
         {/* Header */}

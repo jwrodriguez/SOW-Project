@@ -1044,14 +1044,14 @@ function SowEditPageInner() {
 // Suspense wrapper for useSearchParams()
 export default function SowEditPage() {
   const { data: sessionData } = useSession();
+
+  //Prevent non-admins from using this page
+  if (sessionData?.user.role !== "ADMIN"){
+    useRouter().push("/");
+  }
+
   return (
     <div>
-      {/* New template button - CONDITIONAL RENDERING */}
-
-      {sessionData?.user.role !== "ADMIN" && (
-        useRouter().push("/")
-      )}
-
       <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading editor...</div>}>
         <SowEditPageInner />
       </Suspense>
