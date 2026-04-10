@@ -566,21 +566,27 @@ function SowEditPageInner() {
         showPageNumbers: true, pageNumberPosition: "footer-right",
       },
       sections: [
-        { id: "sec-1", number: "1.0", title: "Project Overview", content: "This Statement of Work (SOW) outlines the scope, deliverables, and requirements for the engagement.", locked: true, tables: [],
+        { id: "sec-1", number: "1.0", title: "Scope of Work", content: "", locked: true, tables: [],
           children: [
-            { id: "sec-1-1", number: "1.1", title: "Background", content: "Background information goes here...", locked: true, tables: [], children: [] },
-            { id: "sec-1-2", number: "1.2", title: "Objectives", content: "The primary objectives of this engagement...", locked: true, tables: [], children: [] },
+            { id: "sec-1-1", number: "1.1", title: "Scope", content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {YOUR PRODUCT}. The contractor should {do these things} and {provide this service}.", locked: false, tables: [], children: [] },
+            { id: "sec-1-2", number: "1.2", title: "Background", content: "The {items to be purchased} are intended to be used at {a location} for {a purpose}. {the items} shoud be delivered to {a location} ", locked: false, tables: [], children: [] },
           ]
         },
-        { id: "sec-2", number: "2.0", title: "Scope of Work", content: "This section defines the detailed scope of work to be performed.", locked: true, tables: [],
+        { id: "sec-2", number: "2.0", title: "Applicable Standards", content: "Contractor, at a minimum, is required to comply with the current editions of the following requirements for design, construction, installation, and safety as applicable. The term “most recent edition” shall be understood to mean “most recently released edition as of date of issuance of contract.” ", locked: true, tables: [],
           children: [
-            { id: "sec-2-1", number: "2.1", title: "In Scope", content: "Items included within the scope of this engagement...", locked: true, tables: [], children: [] },
-            { id: "sec-2-2", number: "2.2", title: "Out of Scope", content: "Items not explicitly mentioned are considered out of scope.", locked: true, tables: [], children: [] },
+            { id: "sec-2-1", number: "2.1", title: "Government Standards", content: "The following documents form a part of this purchase description to the extent stipulated herein.", locked: true, tables: [], children: [] },
+            { id: "sec-2-2", number: "2.2", title: "Non-Government Standards", content: "The following documents form a part of this document to the extent stipulated herein. ", locked: true, tables: [], children: [] },
+            { id: "sec-2-3", number: "2.3", title: "Order of Precedence", content: "", locked: true, tables: [], children: [] },
+            { id: "sec-2-4", number: "2.4", title: "Applicable Standards", content: "", locked: true, tables: [], children: [] },
+            { id: "sec-2-5", number: "2.5", title: "Prohibited Materials", content: "", locked: true, tables: [], children: [] },
+            { id: "sec-2-6", number: "2.6", title: "Environmental Protection", content: "Under the operating, service, transportation and storage conditions described herein the machine shall not emit materials hazardous to the ecological system as prohibited by federal, state or local statutes in effect at the point of installation. ", locked: true, tables: [], children: [] },
           ]
         },
-        { id: "sec-3", number: "3.0", title: "Deliverables", content: "The following deliverables will be provided as part of this engagement.", locked: true, tables: [], children: [] },
+        { id: "sec-3", number: "3.0", title: "Written Submittals", content: "", locked: true, tables: [], children: [] },
+        { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "", locked: true, tables: [], children: [] },
       ],
     };
+
 
     const setupParam = searchParams.get("setup");
     if (setupParam) {
@@ -604,6 +610,34 @@ function SowEditPageInner() {
         if (setup.description) base.sections[0].content = setup.description;
       } catch { /* use defaults */ }
     }
+    const saved = localStorage.getItem("current_draft");
+    if (saved) {
+      try {
+        const setup = JSON.parse(saved);
+        
+        if (setup.documentName) base.documentName = setup.documentName;
+        if (setup.title) base.coverPage.title = setup.title;
+        if (setup.projectNumber) { base.coverPage.projectNumber = setup.projectNumber; base.headerFooter.footerLeft = setup.projectNumber; }
+        if (setup.clientName) base.coverPage.clientName = setup.clientName;
+        if (setup.building) base.coverPage.building = setup.building;
+        if (setup.location) base.coverPage.location = setup.location;
+        if (setup.preparedBy) base.coverPage.preparedBy = setup.preparedBy;
+        if (setup.department) base.coverPage.department = setup.department;
+        if (setup.date) {
+          base.coverPage.date = setup.date;
+          const d = new Date(setup.date + "T00:00:00");
+          const formatted = d.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" });
+          base.headerFooter.headerLeft = `${setup.title || "Statement of Work"}\n${formatted}`;
+        }
+        if (setup.confidentiality) base.coverPage.confidentiality = setup.confidentiality;
+        if (setup.description) base.sections[0].content = setup.description;
+
+        if (setup.sections) base.sections = setup.sections;
+
+      } catch { /* use defaults */ }
+
+    }
+
     return base;
   }, [searchParams]);
 
@@ -1049,6 +1083,7 @@ export default function SowEditPage() {
   if (sessionData?.user.role !== "ADMIN"){
     useRouter().push("/");
   }
+
 
   return (
     <div>
