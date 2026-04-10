@@ -11,7 +11,7 @@
  */
 "use client";
 
-import React, { Suspense, useMemo, useState, useCallback, useRef } from "react";
+import React, { Suspense, useMemo, useState} from "react";
 import { useSearchParams } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -32,36 +32,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 // ============= TYPES =============
-// TypeScript type definitions for every data shape in this file.
-// FieldType is the set of allowed blank field types.
-// TemplateField describes one fillable blank slot inserted into section content.
-// SectionNode is recursive — children: SectionNode[] enables nested subsections.
-// locked: boolean on SectionNode controls whether the section is editable.
-// TemplateData is the top-level document object that gets serialized to JSON on Save.
-type FieldType = "text" | "number" | "word" | "sentence" | "paragraph" | "list" | "date";
-type TemplateField = {
-  id: string; label: string; type: FieldType;
-  defaultValue?: string; placeholder?: string; required?: boolean;
-};
-type SectionNode = {
-  id: string; number: string; title: string; content: string;
-  locked: boolean; tables?: TableData[]; children: SectionNode[];
-};
-type TableData = { id: string; rows: number; cols: number; data: string[][] };
-type CoverPageData = {
-  title: string; projectNumber: string; clientName: string; building: string;
-  location: string; preparedBy: string; department: string; date: string;
-  version: string; confidentiality: string;
-};
-type HeaderFooterData = {
-  headerLeft: string; headerCenter: string; headerRight: string;
-  footerLeft: string; footerCenter: string; footerRight: string;
-  showPageNumbers: boolean; pageNumberPosition: "footer-center" | "footer-right" | "footer-left";
-};
-type TemplateData = {
-  documentName: string; fields: TemplateField[];
-  coverPage: CoverPageData; headerFooter: HeaderFooterData; sections: SectionNode[];
-};
+// You can find Type Declarations and Descriptions used in .../types/pageTypes.ts
+import {FieldType, TemplateField, SectionNode, TableData, HeaderFooterData, TemplateData} from "@/types/pageTypes";
 
 // Allowed field types listed here so both the insert form and edit form share the same options
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
