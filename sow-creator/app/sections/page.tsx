@@ -276,6 +276,7 @@ export default function SectionBuilderPage() {
     if (canvas.length === 0) return;
     const template = buildTemplateData(documentName, canvas);
     const encoded = btoa(JSON.stringify(template));
+    localStorage.setItem("current_draft", JSON.stringify(template));
     router.push(`/edit?draft=${encoded}`);
   }
 
