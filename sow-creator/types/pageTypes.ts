@@ -53,7 +53,10 @@ export type SectionNode = {
   number: string;
   title: string;
   content: string;
-  locked: boolean;
+  lockEdit: boolean;
+  lockDelete: boolean;
+  lockAddTable: boolean;
+  lockAddSections: boolean;
   tables?: TableData[];
   children: SectionNode[];
 };
