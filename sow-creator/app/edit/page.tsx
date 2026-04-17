@@ -11,7 +11,7 @@
  */
 "use client";
 
-import React, { Suspense, useMemo, useState} from "react";
+import React, { Suspense, useMemo, useState, useEffect} from "react";
 import { useSearchParams } from "next/navigation";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -333,7 +333,7 @@ export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fi
 
   return (
     <div ref={setNodeRef} style={style} id={section.id}
-      className={`relative ${section.locked ? "locked-overlay" : ""} ${isSelected ? "ring-2 ring-primary/30 rounded" : ""}`}
+      className={`relative ${section.lockEdit ? "locked-overlay" : ""} ${isSelected ? "ring-2 ring-primary/30 rounded" : ""}`}
       onClick={e => { e.stopPropagation(); onSelect(); }}
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => { setHovered(false); setShowTableForm(false); }}>
 
@@ -344,9 +344,9 @@ export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fi
           <button {...attributes} {...listeners} className="drag-handle px-1 py-0.5 rounded flex items-center" title="Drag to reorder">
             <GripVertical className="h-3 w-3" />
           </button>
-          <button onClick={onToggleLock} title={section.locked ? "Unlock section" : "Lock section"}
+          <button onClick={onToggleLock} title={section.lockEdit ? "Unlock section" : "Lock section"}
             className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
-            {section.locked ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+            {section.lockEdit ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
           </button>
           <button onClick={onAddChild} title="Add subsection" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
             <Plus className="h-3 w-3" /> Sub
@@ -379,14 +379,14 @@ export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fi
 
       {/* Section heading */}
       <div className="flex items-baseline gap-2 mb-1" style={{ marginLeft: `${depth * 16}px` }}>
-        {section.locked && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
+        {section.lockEdit && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
         <span className="font-mono text-gray-400 shrink-0 text-sm select-none">{section.number}</span>
-        <EditableText value={section.title} onChange={v => onUpdate({ title: v })} className={headingClass} placeholder="Section title..." disabled={section.locked} />
+        <EditableText value={section.title} onChange={v => onUpdate({ title: v })} className={headingClass} placeholder="Section title..." disabled={false} />
       </div>
 
       {/* Section body — uses SectionContent for blank rendering */}
       <div className="ml-8" style={{ marginLeft: `${depth * 16 + 32}px` }}>
-        <SectionContent content={section.content} fields={fields} locked={section.locked}
+        <SectionContent content={section.content} fields={fields} locked={false}
           onClickBlank={onClickBlank} onDeleteBlank={onDeleteBlank}
           onChange={v => onUpdate({ content: v })} />
       </div>
@@ -451,7 +451,7 @@ function SortableNavItem({ section, depth, isExpanded, onToggleExpand, onSelect,
             </span>
           : <div className="w-4 shrink-0" />}
         <button onClick={onSelect} className="flex items-center gap-1 flex-1 min-w-0 text-left">
-          {section.locked && <Lock className="h-2.5 w-2.5 text-slate-400 shrink-0" />}
+          {section.lockEdit && <Lock className="h-2.5 w-2.5 text-slate-400 shrink-0" />}
           <span className="font-mono text-gray-400 min-w-[35px] shrink-0">{section.number}</span>
           <span className="truncate">{section.title}</span>
         </button>
@@ -486,7 +486,7 @@ function updateSection(sections: SectionNode[], id: string, updates: Partial<Sec
 // Appends a blank subsection inside the given parent
 function addChildSection(sections: SectionNode[], parentId: string): SectionNode[] {
   return sections.map(s => s.id === parentId
-    ? { ...s, children: [...s.children, { id: `sec-${Date.now()}`, number: "", title: "New Subsection", content: "", locked: true, tables: [], children: [] }] }
+    ? { ...s, children: [...s.children, { id: `sec-${Date.now()}`, number: "", title: "New Subsection", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] }] }
     : { ...s, children: addChildSection(s.children, parentId) });
 }
 
@@ -494,7 +494,7 @@ function addChildSection(sections: SectionNode[], parentId: string): SectionNode
 function addSiblingHelper(sections: SectionNode[], siblingId: string): { sections: SectionNode[]; added: boolean } {
   for (let i = 0; i < sections.length; i++) {
     if (sections[i].id === siblingId) {
-      const newSec: SectionNode = { id: `sec-${Date.now()}`, number: "", title: "New Section", content: "", locked: true, tables: [], children: [] };
+      const newSec: SectionNode = { id: `sec-${Date.now()}`, number: "", title: "New Section", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] };
       const next = [...sections]; next.splice(i + 1, 0, newSec);
       return { sections: next, added: true };
     }
@@ -546,17 +546,18 @@ function removeBlankFromContent(sections: SectionNode[], fieldId: string): Secti
 // All document state, blank state, DnD state, and render functions live here.
 function SowEditPageInner() {
   const searchParams = useSearchParams();
+  const router  = useRouter();
 
   // Build initial document state once with useMemo.
   // If ?setup= param is present (base64 JSON from the /new form), decode and override defaults.
   const defaultData: TemplateData = useMemo(() => {
     const base: TemplateData = {
-      documentName: "Untitled Document",
+      documentName: "SOW ID",
       fields: [],
       coverPage: {
-        title: "Statement of Work", projectNumber: "SOW-2026-001", clientName: "Product Name",
-        building: "3001", location: "Norman, Oklahoma", preparedBy: "Your Name",
-        department: "Department Name", date: new Date().toISOString().split("T")[0],
+        title: "Statement of Work (SOW)", projectNumber: "SOW-2026-001", clientName: "Product Name",
+        building: "{Building}", location: "{Location}", preparedBy: "{Team or Individual}",
+        department: "{Department}", date: new Date().toISOString().split("T")[0],
         version: "1.0", confidentiality: "Confidential",
       },
       headerFooter: {
@@ -565,24 +566,24 @@ function SowEditPageInner() {
         showPageNumbers: true, pageNumberPosition: "footer-right",
       },
       sections: [
-        { id: "sec-1", number: "1.0", title: "Scope of Work", content: "", locked: true, tables: [],
+        { id: "sec-1", number: "1.0", title: "Scope of Work", content: "{{field_additional_scope_details_1776447594151}}", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [],
           children: [
-            { id: "sec-1-1", number: "1.1", title: "Scope", content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {YOUR PRODUCT}. The contractor should {do these things} and {provide this service}.", locked: false, tables: [], children: [] },
-            { id: "sec-1-2", number: "1.2", title: "Background", content: "The {items to be purchased} are intended to be used at {a location} for {a purpose}. {the items} shoud be delivered to {a location} ", locked: false, tables: [], children: [] },
+            { id: "sec-1-1", number: "1.1", title: "Scope", content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {YOUR PRODUCT}. The contractor should {do these things} and {provide this service}.", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
+            { id: "sec-1-2", number: "1.2", title: "Background", content: "The {items to be purchased} are intended to be used at {a location} for {a purpose}. {the items} shoud be delivered to {a location} ", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
           ]
         },
-        { id: "sec-2", number: "2.0", title: "Applicable Standards", content: "Contractor, at a minimum, is required to comply with the current editions of the following requirements for design, construction, installation, and safety as applicable. The term “most recent edition” shall be understood to mean “most recently released edition as of date of issuance of contract.” ", locked: true, tables: [],
+        { id: "sec-2", number: "2.0", title: "Applicable Standards", content: "Contractor, at a minimum, is required to comply with the current editions of the following requirements for design, construction, installation, and safety as applicable. The term “most recent edition” shall be understood to mean “most recently released edition as of date of issuance of contract.” ", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [],
           children: [
-            { id: "sec-2-1", number: "2.1", title: "Government Standards", content: "The following documents form a part of this purchase description to the extent stipulated herein.", locked: true, tables: [], children: [] },
-            { id: "sec-2-2", number: "2.2", title: "Non-Government Standards", content: "The following documents form a part of this document to the extent stipulated herein. ", locked: true, tables: [], children: [] },
-            { id: "sec-2-3", number: "2.3", title: "Order of Precedence", content: "", locked: true, tables: [], children: [] },
-            { id: "sec-2-4", number: "2.4", title: "Applicable Standards", content: "", locked: true, tables: [], children: [] },
-            { id: "sec-2-5", number: "2.5", title: "Prohibited Materials", content: "", locked: true, tables: [], children: [] },
-            { id: "sec-2-6", number: "2.6", title: "Environmental Protection", content: "Under the operating, service, transportation and storage conditions described herein the machine shall not emit materials hazardous to the ecological system as prohibited by federal, state or local statutes in effect at the point of installation. ", locked: true, tables: [], children: [] },
+            { id: "sec-2-1", number: "2.1", title: "Government Standards", content: "The following documents form a part of this purchase description to the extent stipulated herein.", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
+            { id: "sec-2-2", number: "2.2", title: "Non-Government Standards", content: "The following documents form a part of this document to the extent stipulated herein. ", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
+            { id: "sec-2-3", number: "2.3", title: "Order of Precedence", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
+            { id: "sec-2-4", number: "2.4", title: "Applicable Standards", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
+            { id: "sec-2-5", number: "2.5", title: "Prohibited Materials", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
+            { id: "sec-2-6", number: "2.6", title: "Environmental Protection", content: "Under the operating, service, transportation and storage conditions described herein the machine shall not emit materials hazardous to the ecological system as prohibited by federal, state or local statutes in effect at the point of installation. ", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
           ]
         },
-        { id: "sec-3", number: "3.0", title: "Written Submittals", content: "", locked: true, tables: [], children: [] },
-        { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "", locked: true, tables: [], children: [] },
+        { id: "sec-3", number: "3.0", title: "Written Submittals", content: "", lockEdit: true, lockDelete: true, lockAddTable: false, lockAddSections: true, tables: [], children: [] },
+        { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: false, tables: [], children: [] },
       ],
     };
 
@@ -730,7 +731,7 @@ function SowEditPageInner() {
             setData(p => ({ ...p, sections: renumberSections(deleteSection(p.sections, section.id)) }));
             if (selectedSectionId === section.id) setSelectedSectionId(null);
           };
-          const onToggleLock = () => setData(p => ({ ...p, sections: updateSection(p.sections, section.id, { locked: !section.locked }) }));
+          const onToggleLock = () => setData(p => ({ ...p, sections: updateSection(p.sections, section.id, { lockEdit: !section.lockEdit }) }));
           const onAddTable = (rows: number, cols: number) => {
             if (rows < 1 || rows > 20 || cols < 1 || cols > 10) { alert("Rows: 1-20, Columns: 1-10"); return; }
             const newTable: TableData = { id: `t-${Date.now()}`, rows, cols, data: Array(rows).fill(null).map(() => Array(cols).fill("")) };
@@ -795,6 +796,11 @@ function SowEditPageInner() {
   const tocData = generateTOCEntries(data.sections);
   const editingField = editingFieldId ? data.fields.find(f => f.id === editingFieldId) : null;
 
+  const handleReturnToNewForm = () => {
+    router.push("/login");
+  };
+  
+
   // ============= RENDER =============
   return (
     <SidebarProvider>
@@ -802,21 +808,10 @@ function SowEditPageInner() {
         {/* Slim header — just sidebar trigger + doc name */}
         <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4 bg-background sticky top-0 z-10">
           <div className="flex items-center gap-2">
-            <SidebarTrigger className="-ml-1" />
-            <FileText className="h-4 w-4 text-primary" />
-            {isEditingName ? (
-              <div className="flex items-center gap-1">
-                <Input autoFocus value={editedName} onChange={e => setEditedName(e.target.value)} className="h-7 w-52 text-sm"
-                  onKeyDown={e => { if (e.key === "Enter") { setData(p => ({ ...p, documentName: editedName })); setIsEditingName(false); } if (e.key === "Escape") { setEditedName(data.documentName); setIsEditingName(false); } }} />
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setData(p => ({ ...p, documentName: editedName })); setIsEditingName(false); }}>Save</Button>
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditedName(data.documentName); setIsEditingName(false); }}>Cancel</Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1">
-                <span className="text-sm font-semibold">{data.documentName}</span>
-                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setIsEditingName(true)}><Edit2 className="h-3 w-3" /></Button>
-              </div>
-            )}
+            <button onClick={handleReturnToNewForm} className="hover:bg-muted rounded px-1.5 py-0.5 flex items-center gap-1">
+              <FileText className="h-4 w-4 text-primary" /> Return to Home
+            </button>
+            
           </div>
           <div className="text-xs text-muted-foreground">
             {data.fields.length} blank{data.fields.length !== 1 ? "s" : ""} · {data.sections.length} section{data.sections.length !== 1 ? "s" : ""}
@@ -846,7 +841,7 @@ function SowEditPageInner() {
 
                 {/* Insert group */}
                 <RibbonBtn icon={Plus} label="Section" onClick={() => setData(p => ({
-                  ...p, sections: renumberSections([...p.sections, { id: `sec-${Date.now()}`, number: "", title: "New Section", content: "", locked: true, tables: [], children: [] }])
+                  ...p, sections: renumberSections([...p.sections, { id: `sec-${Date.now()}`, number: "", title: "New Section", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] }])
                 }))} />
                 <RibbonBtn icon={Plus} label="Sub" disabled={!selectedSection}
                   onClick={() => {
@@ -859,13 +854,37 @@ function SowEditPageInner() {
                 <div className="ribbon-divider" />
 
                 {/* Lock group */}
-                <RibbonBtn icon={selectedSection?.locked ? Lock : Unlock}
-                  label={selectedSection?.locked ? "Locked" : "Unlocked"}
-                  active={selectedSection?.locked}
+                <RibbonBtn icon={selectedSection?.lockEdit ? Lock : Unlock}
+                  label={"Lock Text"}
+                  active={selectedSection?.lockEdit}
                   disabled={!selectedSection}
                   onClick={() => {
                     if (!selectedSectionId) return;
-                    setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { locked: !selectedSection?.locked }) }));
+                    setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockEdit: !selectedSection?.lockEdit }) }));
+                  }} />
+                <RibbonBtn icon={selectedSection?.lockDelete ? Lock : Unlock}
+                  label={"Lock Deletion"}
+                  active={selectedSection?.lockDelete}
+                  disabled={!selectedSection}
+                  onClick={() => {
+                    if (!selectedSectionId) return;
+                    setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockDelete: !selectedSection?.lockDelete }) }));
+                  }} />
+                <RibbonBtn icon={selectedSection?.lockAddTable ? Lock : Unlock}
+                  label={"Lock Tables"}
+                  active={selectedSection?.lockAddTable}
+                  disabled={!selectedSection}
+                  onClick={() => {
+                    if (!selectedSectionId) return;
+                    setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockAddTable: !selectedSection?.lockAddTable }) }));
+                  }} />
+                <RibbonBtn icon={selectedSection?.lockAddSections ? Lock : Unlock}
+                  label={"Lock Text"}
+                  active={selectedSection?.lockAddSections}
+                  disabled={!selectedSection}
+                  onClick={() => {
+                    if (!selectedSectionId) return;
+                    setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockAddSections: !selectedSection?.lockAddSections }) }));
                   }} />
                 <div className="ribbon-divider" />
 
@@ -967,15 +986,18 @@ function SowEditPageInner() {
                     <div className="absolute inset-8 flex items-center justify-center">
                       <div className="text-center w-full px-12">
                         <EditableText value={data.coverPage.title} onChange={v => updateCover("title", v)} className="text-4xl font-bold" placeholder="SOW Title" />
+
                         <p className="text-3xl font-semibold mt-6 select-none">FOR</p>
                         <EditableText value={data.coverPage.clientName} onChange={v => updateCover("clientName", v)} className="text-4xl font-bold mt-4" placeholder="Product Name" />
-                        <div className="flex items-baseline justify-center gap-2 mt-4">
+                            
+                        <div className="flex items-baseline justify-center gap-2 mt-10">
                           <span className="text-3xl font-semibold select-none">BUILDING</span>
                           <EditableText value={data.coverPage.building} onChange={v => updateCover("building", v)} className="text-3xl font-semibold" placeholder="#" />
                         </div>
+
                         <div className="mt-16 space-y-3">
                           <EditableText value={data.coverPage.location} onChange={v => updateCover("location", v)} className="text-xl" placeholder="Location" />
-                          <p className="text-lg font-semibold mt-4 select-none">Prepared by</p>
+                          <p className="text-lg font-semibold mt-10 select-none">Prepared by</p>
                           <EditableText value={data.coverPage.preparedBy} onChange={v => updateCover("preparedBy", v)} className="text-xl" placeholder="Name" />
                           <EditableText value={data.coverPage.department} onChange={v => updateCover("department", v)} className="text-xl" placeholder="Team / Department" />
                           <EditableText value={data.coverPage.date} onChange={v => updateCover("date", v)} className="text-xl mt-2" placeholder="Date" />
@@ -1005,7 +1027,7 @@ function SowEditPageInner() {
                   <DocumentPage hf={data.headerFooter} onHF={updateHF} pageNumber={3}>
                     {renderSections(data.sections)}
                     <button onClick={() => setData(p => ({
-                      ...p, sections: renumberSections([...p.sections, { id: `sec-${Date.now()}`, number: "", title: "New Section", content: "", locked: true, tables: [], children: [] }])
+                      ...p, sections: renumberSections([...p.sections, { id: `sec-${Date.now()}`, number: "", title: "New Section", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] }])
                     }))} className="mt-6 flex items-center gap-2 text-sm text-gray-400 hover:text-primary hover:border-primary border border-dashed border-gray-300 rounded px-4 py-2 w-full justify-center transition-colors">
                       <Plus className="h-4 w-4" /> Add Top-Level Section
                     </button>
@@ -1023,11 +1045,18 @@ function SowEditPageInner() {
 // Suspense wrapper for useSearchParams()
 export default function SowEditPage() {
   const { data: sessionData } = useSession();
+  const router = useRouter();
 
   //Prevent non-admins from using this page
-  if (sessionData?.user.role !== "ADMIN"){
-    useRouter().push("/");
-  }
+  useEffect(() => {
+    if (sessionData && sessionData.user.role !== "ADMIN") {
+      router.push("/login");
+    }
+  }, [sessionData, router]);
+
+  // Now you can do your conditional logic for rendering
+  if (!sessionData) return <div>Loading...</div>;
+  if (sessionData.user.role !== "ADMIN") return null;
 
 
   return (

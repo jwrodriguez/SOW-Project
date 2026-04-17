@@ -344,9 +344,9 @@ export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fi
       {hovered && (
         <div className="absolute -top-1 right-0 flex gap-1 bg-white border border-gray-200 rounded shadow-md px-1.5 py-1 z-20 text-xs whitespace-nowrap">
           {/* Drag handle */}
-          <button {...attributes} {...listeners} className="drag-handle px-1 py-0.5 rounded flex items-center" title="Drag to reorder">
+          {/* <button {...attributes} {...listeners} className="drag-handle px-1 py-0.5 rounded flex items-center" title="Drag to reorder">
             <GripVertical className="h-3 w-3" />
-          </button>
+          </button> */}
 
           {/* Can they add sections? */}
           {section.lockAddSections ? <></> : (

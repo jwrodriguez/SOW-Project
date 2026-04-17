@@ -1,5 +1,10 @@
 "use client";
 
+
+import { useSession } from "@/lib/auth-client";
+import { NavUser } from "@/components/nav-user";
+
+
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
@@ -134,6 +139,22 @@ export default function NewSOWPage() {
   // Determine which step we're on based on filled fields
   const step: 1 | 2 | 3 = preparedBy || department || date !== today ? 3 : clientName || building || location ? 2 : 1;
 
+
+  const { data: sessionData, isPending } = useSession();
+  const user = sessionData?.user
+  ? {
+      name: sessionData.user.name ?? "User",
+      email: sessionData.user.email ?? "",
+      avatar: sessionData.user.image ?? "",
+    }
+  : null;
+
+
+  const handleEditForm = async () => {
+      router.push("/edit");
+    };
+
+
   return (
     <SidebarProvider>
       <SidebarInset className="flex flex-col h-screen overflow-hidden">
@@ -143,8 +164,19 @@ export default function NewSOWPage() {
             <FilePlus className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold">New Statement of Work</span>
           </div>
-        </header>
 
+          {/* This pushes everything after it to the right */}
+          <div className="flex-1" />
+
+          <div className="flex items-center gap-2">
+            <span> 
+              <button onClick={handleEditForm} className="hover:underline text-sm">
+                Edit Form
+              </button> 
+            </span>
+            <span> {user ? <NavUser user={user} /> : null} </span>
+          </div>
+        </header>
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto bg-muted/20">
           <div className="max-w-2xl mx-auto py-10 px-6">
