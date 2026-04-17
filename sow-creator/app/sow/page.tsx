@@ -332,9 +332,11 @@ export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fi
   // Heading size scales with depth: 0 = H1, 1 = H2, 2+ = H3
   const headingClass = depth === 0 ? "text-2xl font-bold" : depth === 1 ? "text-xl font-semibold" : "text-lg font-medium";
 
+  const locked = section.lockEdit || section.lockDelete || section.lockAddTable || section.lockAddSections;
+
   return (
     <div ref={setNodeRef} style={style} id={section.id}
-      className={`relative ${section.locked ? "locked-overlay" : ""} ${isSelected ? "ring-2 ring-primary/30 rounded" : ""}`}
+      className={`relative ${""} ${isSelected ? "ring-2 ring-primary/30 rounded" : ""}`}
       onClick={e => { e.stopPropagation(); onSelect(); }}
       onMouseEnter={() => setHovered(true)} onMouseLeave={() => { setHovered(false); setShowTableForm(false); }}>
 
@@ -345,21 +347,33 @@ export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fi
           <button {...attributes} {...listeners} className="drag-handle px-1 py-0.5 rounded flex items-center" title="Drag to reorder">
             <GripVertical className="h-3 w-3" />
           </button>
-          <button onClick={onAddChild} title="Add subsection" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
-            <Plus className="h-3 w-3" /> Sub
-          </button>
-          <button onClick={onAddSibling} title="Add section at same level" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
-            <Plus className="h-3 w-3" /> Section
-          </button>
+
+          {/* Can they add sections? */}
+          {section.lockAddSections ? (
+            <>
+            <button onClick={onAddChild} title="Add subsection" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
+                <Plus className="h-3 w-3" /> Sub
+            </button>
+            <button onClick={onAddSibling} title="Add section at same level" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
+                <Plus className="h-3 w-3" /> Section
+            </button>
+            </>) : <></>}
+          
+          {/* can they add tables? */}
+          {section.lockAddTable ? (
           <button onClick={() => setShowTableForm(t => !t)} title="Add table" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
             <TableIcon className="h-3 w-3" /> Table
-          </button>
+          </button>) : <></>}
+
+          {/* can they delete? */}
+          {section.lockDelete ? (
           <button onClick={onDelete} disabled={isOnlyTop} title="Delete section"
             className="hover:bg-red-50 px-1.5 py-0.5 rounded flex items-center gap-1 text-red-500 disabled:opacity-30">
             <Trash2 className="h-3 w-3" />
-          </button>
+          </button>) : <Lock className="h-3 w-3" />}
         </div>
-      )}
+      )
+      }
 
       {/* Table size picker */}
       {showTableForm && (
@@ -1040,11 +1054,6 @@ function SowEditPageInner() {
                   {/* Section Content — locked sections shown read-only, unlocked sections editable */}
                   <DocumentPage hf={data.headerFooter} onHF={updateHF} pageNumber={3}>
                     {renderSections(data.sections)}
-                    <button onClick={() => setData(p => ({
-                      ...p, sections: renumberSections([...p.sections, { id: `sec-${Date.now()}`, number: "", title: "New Section", content: "", locked: true, tables: [], children: [] }])
-                    }))} className="mt-6 flex items-center gap-2 text-sm text-gray-400 hover:text-primary hover:border-primary border border-dashed border-gray-300 rounded px-4 py-2 w-full justify-center transition-colors">
-                      <Plus className="h-4 w-4" /> Add Top-Level Section
-                    </button>
                   </DocumentPage>
                 </div>
               </div>
