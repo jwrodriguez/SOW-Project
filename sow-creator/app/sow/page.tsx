@@ -14,10 +14,10 @@ import type { TemplateData, SectionNode, TemplateField, HeaderFooterData } from 
 //
 // Two types of editable content exist in this template:
 //
-// 1. UNLOCKED SECTIONS (locked: false) - engineers click and type freely.
+// 1. UNLOCKED SECTIONS (locked: false) — engineers click and type freely.
 //    The text inside is just a hint showing what to write, not a real blank.
 //
-// 2. BLANKS in LOCKED SECTIONS - double curly {{field_id}} tokens match entries
+// 2. BLANKS in LOCKED SECTIONS — double curly {{field_id}} tokens match entries
 //    in data.fields. These appear in both the document as inline inputs AND in
 //    the questionnaire bar above. The admin creates these in the edit page using
 //    the blank insertion form. Filling one in updates both places simultaneously.
@@ -68,7 +68,7 @@ const DEFAULT_TEMPLATE: TemplateData = {
     {
       id: "sec-1", number: "1.0", title: "Scope of Work", content: "", locked: true, tables: [],
       children: [
-        // Unlocked - engineer edits freely. Blanks here are still filled via the questionnaire.
+        // Unlocked — engineer edits freely. Blanks here are still filled via the questionnaire.
         {
           id: "sec-1-1", number: "1.1", title: "Scope", locked: false, tables: [], children: [],
           content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {{field_product_name_001}}. The contractor should {{field_contractor_tasks_002}} and {{field_contractor_service_003}}.",
@@ -86,13 +86,13 @@ const DEFAULT_TEMPLATE: TemplateData = {
         { id: "sec-2-1", number: "2.1", title: "Government Standards",    content: "The following documents form a part of this purchase description to the extent stipulated herein.",  locked: true, tables: [], children: [] },
         { id: "sec-2-2", number: "2.2", title: "Non-Government Standards", content: "The following documents form a part of this document to the extent stipulated herein.",              locked: true, tables: [], children: [] },
         { id: "sec-2-3", number: "2.3", title: "Order of Precedence",      content: "In the event of a conflict between the text of this specification and the references cited herein, the text of this specification takes precedence.", locked: true, tables: [], children: [] },
-        // Locked with blank - engineer fills via questionnaire bar or inline input
+        // Locked with blank — engineer fills via questionnaire bar or inline input
         { id: "sec-2-4", number: "2.4", title: "Applicable Standards",    content: "{{field_applicable_stds_008}}",   locked: true, tables: [], children: [] },
         { id: "sec-2-5", number: "2.5", title: "Prohibited Materials",    content: "{{field_prohibited_mats_009}}",    locked: true, tables: [], children: [] },
         { id: "sec-2-6", number: "2.6", title: "Environmental Protection", content: "Under the operating, service, transportation and storage conditions described herein the machine shall not emit materials hazardous to the ecological system as prohibited by federal, state or local statutes in effect at the point of installation.", locked: true, tables: [], children: [] },
       ],
     },
-    // Locked with blanks - lock states now match the admin edit page defaults
+    // Locked with blanks — lock states now match the admin edit page defaults
     { id: "sec-3", number: "3.0", title: "Written Submittals",                       content: "{{field_written_submittals_010}}", locked: true, tables: [], children: [] },
     { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "{{field_gfp_details_011}}",        locked: true, tables: [], children: [] },
   ],
@@ -118,7 +118,7 @@ function generateTOCEntries(sections: SectionNode[], depth = 0, startPage = 3) {
 
 // ─── Inline blank input ───────────────────────────────────────────────────────
 // Renders a single blank field as an inline input inside section text.
-// Engineers type directly into these - no colored chip, just a clean input.
+// Engineers type directly into these — no colored chip, just a clean input.
 function BlankInput({ field, value, onChange }: {
   field: TemplateField;
   value: string;
@@ -190,13 +190,13 @@ function EngineerSectionContent({ content, fields, fieldValues, locked, onChange
     </div>
   );
 
-  // Locked sections show static text with fillable blank inputs - no text editing
+  // Locked sections show static text with fillable blank inputs — no text editing
   if (locked) {
     return <div className="px-1">{renderedContent}</div>;
   }
 
   // Unlocked sections are click-to-edit. While editing, show raw textarea.
-  // Blank chips are not shown in edit mode - engineer edits raw content string.
+  // Blank chips are not shown in edit mode — engineer edits raw content string.
   // When they click away, the rendered view with blanks comes back.
   return editing ? (
     <textarea
@@ -238,7 +238,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
 
   return (
     <div id={section.id} style={{ marginLeft: `${indent}px`, marginBottom: depth === 0 ? "2rem" : "1.25rem" }}>
-      {/* Section heading - read-only for engineers, lock icon shown when locked */}
+      {/* Section heading — read-only for engineers, lock icon shown when locked */}
       <div className="flex items-baseline gap-2 mb-1">
         {section.locked && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
         <span className="font-mono text-gray-400 shrink-0 text-sm select-none">{section.number}</span>
@@ -257,7 +257,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
         />
       </div>
 
-      {/* Tables - read-only for engineers */}
+      {/* Tables — read-only for engineers */}
       {section.tables && section.tables.length > 0 && (
         <div style={{ marginLeft: `${32}px` }} className="mt-3 space-y-4">
           {section.tables.map(table => (
@@ -267,7 +267,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
                   <tr key={ri}>
                     {row.map((cell, ci) => (
                       <td key={ci} className="border border-gray-300 p-1.5 text-sm">
-                        {cell || <span className="text-gray-300">-</span>}
+                        {cell || <span className="text-gray-300">—</span>}
                       </td>
                     ))}
                   </tr>
@@ -285,7 +285,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
 
 // ─── Document page wrapper ────────────────────────────────────────────────────
 // Renders an 8.5x11in white page with static header and footer.
-// Engineers cannot edit the header or footer - those are admin-controlled.
+// Engineers cannot edit the header or footer — those are admin-controlled.
 function DocumentPage({ hf, pageNumber, children }: {
   hf: HeaderFooterData;
   pageNumber: number;
@@ -296,7 +296,7 @@ function DocumentPage({ hf, pageNumber, children }: {
 
   return (
     <div className="bg-white shadow-lg mx-auto text-black" style={{ width: "8.5in", minHeight: "11in", display: "flex", flexDirection: "column" }}>
-      {/* Header - static, not editable by engineers */}
+      {/* Header — static, not editable by engineers */}
       <div style={{ padding: "0.5in 1in 0.1in 1in" }}>
         <div className="grid grid-cols-3 gap-1 text-sm text-gray-700">
           <div className="whitespace-pre-wrap">{hf.headerLeft}</div>
@@ -308,7 +308,7 @@ function DocumentPage({ hf, pageNumber, children }: {
       {/* Body */}
       <div style={{ padding: "0.1in 1in", flex: 1 }}>{children}</div>
 
-      {/* Footer - static, {PAGE} resolved */}
+      {/* Footer — static, {PAGE} resolved */}
       <div style={{ padding: "0.1in 1in 0.5in 1in" }}>
         <div className="grid grid-cols-3 gap-1 text-sm text-gray-700">
           <div className="whitespace-pre-wrap">{resolve(hf.footerLeft)}</div>
@@ -333,7 +333,7 @@ function updateSectionContent(sections: SectionNode[], id: string, content: stri
 
 // ─── Questionnaire helpers ────────────────────────────────────────────────────
 
-// Represents one question in the questionnaire bar - a blank field with
+// Represents one question in the questionnaire bar — a blank field with
 // the section context it belongs to so the bar can show where it lives.
 type QuestionItem = {
   field: TemplateField;
@@ -344,7 +344,7 @@ type QuestionItem = {
 
 // Walks the section tree in document order and builds a flat ordered list
 // of questions by finding every {{field_id}} token in section content strings.
-// Fields that appear multiple times are deduplicated - first occurrence wins.
+// Fields that appear multiple times are deduplicated — first occurrence wins.
 // This preserves the reading order of the document which is the natural
 // questionnaire order for the engineer.
 function buildQuestionList(sections: SectionNode[], fields: TemplateField[]): QuestionItem[] {
@@ -381,7 +381,8 @@ function buildQuestionList(sections: SectionNode[], fields: TemplateField[]): Qu
 // ─── Questionnaire bar ────────────────────────────────────────────────────────
 // Sticky panel below the main header. Shows one question at a time with
 // prev/next navigation and a dropdown to jump to any question.
-// The input here calls onChangeField - same handler as the inline BlankInputs -
+// Dot indicators show answered/skipped/current status for every question at a glance.
+// The input here calls onChangeField — same handler as the inline BlankInputs —
 // so the document preview updates live as the engineer types.
 function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, onChangeIndex }: {
   questions: QuestionItem[];
@@ -401,7 +402,18 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
 
   const current = questions[activeIndex];
   const value = fieldValues[current.field.id] ?? current.field.defaultValue ?? "";
-  const filledCount = questions.filter(q => (fieldValues[q.field.id] ?? q.field.defaultValue ?? "").trim() !== "").length;
+
+  // Compute answered/skipped status for every question for the dot tracker
+  const statuses = questions.map((q, i) => {
+    const v = (fieldValues[q.field.id] ?? q.field.defaultValue ?? "").trim();
+    if (i === activeIndex) return "active";
+    if (v !== "") return "answered";
+    return "skipped";
+  });
+
+  const filledCount = statuses.filter(s => s === "answered").length;
+  const skippedCount = statuses.filter(s => s === "skipped" || (s === "active" && value.trim() === "")).length;
+  const allDone = filledCount === questions.length || (filledCount === questions.length - 1 && value.trim() !== "");
   const isFilled = value.trim() !== "";
 
   function handleKey(e: React.KeyboardEvent) {
@@ -411,50 +423,110 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
     }
   }
 
+  // Finds the next unanswered question after the current index for the Skip button
+  function findNextSkipped(): number | null {
+    for (let i = activeIndex + 1; i < questions.length; i++) {
+      const v = (fieldValues[questions[i].field.id] ?? questions[i].field.defaultValue ?? "").trim();
+      if (v === "") return i;
+    }
+    // Wrap around and check before current index
+    for (let i = 0; i < activeIndex; i++) {
+      const v = (fieldValues[questions[i].field.id] ?? questions[i].field.defaultValue ?? "").trim();
+      if (v === "") return i;
+    }
+    return null;
+  }
+
+  const nextSkipped = findNextSkipped();
+
   return (
-    <div className="shrink-0 border-b bg-background/95 backdrop-blur px-4 py-3 z-20">
-      {/* Top row - question counter, section badge, progress */}
-      <div className="flex items-center justify-between mb-2">
-        <div className="flex items-center gap-2">
-          {/* Dropdown to jump to any question */}
+    <div className="shrink-0 border-b bg-background shadow-sm px-5 py-4 z-20 space-y-3">
+
+      {/* Row 1 — question number, section badge, title, progress summary */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          {/* Dropdown to jump to any question — grouped by section */}
           <select
             value={activeIndex}
             onChange={e => onChangeIndex(Number(e.target.value))}
-            className="text-xs border border-input rounded px-2 py-1 bg-background outline-none focus:border-primary cursor-pointer"
+            className="text-xs border border-input rounded px-2 py-1 bg-background outline-none focus:border-primary cursor-pointer font-medium"
           >
-            {questions.map((q, i) => (
-              <option key={q.field.id} value={i}>
-                Q{i + 1} - {q.sectionNumber} {q.field.label}
-              </option>
-            ))}
+            {(() => {
+              // Group questions by section title for optgroup labels
+              const groups: { sectionNumber: string; sectionTitle: string; items: { q: QuestionItem; i: number }[] }[] = [];
+              questions.forEach((q, i) => {
+                const last = groups[groups.length - 1];
+                if (last && last.sectionTitle === q.sectionTitle) {
+                  last.items.push({ q, i });
+                } else {
+                  groups.push({ sectionNumber: q.sectionNumber, sectionTitle: q.sectionTitle, items: [{ q, i }] });
+                }
+              });
+              return groups.map(group => (
+                <optgroup key={group.sectionTitle} label={`${group.sectionNumber} ${group.sectionTitle}`}>
+                  {group.items.map(({ q, i }) => {
+                    const v = (fieldValues[q.field.id] ?? q.field.defaultValue ?? "").trim();
+                    return (
+                      <option key={q.field.id} value={i}>
+                        {v !== "" ? "✓" : "○"} {q.field.label}
+                      </option>
+                    );
+                  })}
+                </optgroup>
+              ));
+            })()}
           </select>
-          {/* Section context badge */}
-          <span className="text-xs bg-primary/10 text-primary font-mono px-2 py-0.5 rounded">
+
+          {/* Section context */}
+          <span className="text-xs bg-primary/10 text-primary font-mono px-2 py-0.5 rounded-full font-medium">
             {current.sectionNumber}
           </span>
-          <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+          <span className="text-xs text-muted-foreground truncate max-w-[240px]">
             {current.sectionTitle}
           </span>
         </div>
-        {/* Progress indicator */}
+
+        {/* Progress summary — single consolidated indicator */}
         <div className="flex items-center gap-2">
-          {isFilled
-            ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
-            : <Circle className="h-3.5 w-3.5 text-muted-foreground" />
-          }
-          <span className={`text-xs font-medium ${filledCount === questions.length ? "text-green-600" : "text-muted-foreground"}`}>
-            {filledCount}/{questions.length} answered
-          </span>
+          {allDone ? (
+            <span className="text-xs text-green-600 font-semibold flex items-center gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5" /> All {questions.length} answered
+            </span>
+          ) : (
+            <span className="text-xs font-medium flex items-center gap-1.5">
+              <span className="text-green-600">{filledCount + (isFilled ? 1 : 0)} answered</span>
+              <span className="text-muted-foreground">·</span>
+              <span className="text-amber-600">{skippedCount - (isFilled ? 1 : 0) < 0 ? 0 : skippedCount - (isFilled ? 1 : 0)} unanswered</span>
+            </span>
+          )}
         </div>
       </div>
 
-      {/* Bottom row - question label, input, prev/next */}
+      {/* Row 2 — dot tracker showing status of every question */}
+      <div className="flex items-center gap-1 flex-wrap">
+        {statuses.map((status, i) => (
+          <button
+            key={questions[i].field.id}
+            onClick={() => onChangeIndex(i)}
+            title={`Q${i + 1}: ${questions[i].field.label} — ${status === "answered" ? "answered" : status === "active" ? "current" : "unanswered"}`}
+            className={`h-2.5 rounded-full transition-all ${
+              status === "active"
+                ? "w-6 bg-primary"
+                : status === "answered"
+                  ? "w-2.5 bg-green-500 hover:bg-green-400"
+                  : "w-2.5 bg-amber-300 hover:bg-amber-400 dark:bg-amber-600"
+            }`}
+          />
+        ))}
+      </div>
+
+      {/* Row 3 — label, input, navigation */}
       <div className="flex items-center gap-3">
         {/* Prev button */}
         <Button
           size="sm"
           variant="outline"
-          className="h-8 px-2 shrink-0"
+          className="h-9 px-3 shrink-0"
           disabled={activeIndex === 0}
           onClick={() => onChangeIndex(activeIndex - 1)}
           title="Previous question"
@@ -464,10 +536,13 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
 
         {/* Question label + input */}
         <div className="flex-1 flex items-center gap-3 min-w-0">
-          <label className="text-sm font-medium shrink-0 flex items-center gap-1">
-            {current.field.required && <span className="text-destructive text-xs">*</span>}
+          <label className="text-sm font-semibold shrink-0 flex items-center gap-1 min-w-fit">
+            {current.field.required && (
+              <span className="text-destructive text-xs" title="Required">*</span>
+            )}
             {current.field.label}
           </label>
+
           {current.field.type === "paragraph" ? (
             <textarea
               ref={inputRef as React.RefObject<HTMLTextAreaElement>}
@@ -475,7 +550,7 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
               onChange={e => onChangeField(current.field.id, e.target.value)}
               placeholder={current.field.placeholder || `Enter ${current.field.label.toLowerCase()}...`}
               rows={2}
-              className="flex-1 border border-input rounded px-3 py-1.5 text-sm bg-background outline-none focus:border-primary resize-none"
+              className="flex-1 border border-input rounded-md px-3 py-2 text-sm bg-background outline-none focus:border-primary resize-none"
             />
           ) : (
             <input
@@ -485,24 +560,36 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
               onChange={e => onChangeField(current.field.id, e.target.value)}
               onKeyDown={handleKey}
               placeholder={current.field.placeholder || `Enter ${current.field.label.toLowerCase()}...`}
-              className="flex-1 h-8 border border-input rounded px-3 text-sm bg-background outline-none focus:border-primary"
+              className="flex-1 h-9 border border-input rounded-md px-3 text-sm bg-background outline-none focus:border-primary"
             />
           )}
-          {current.field.type !== "paragraph" && (
-            <span className="text-xs text-muted-foreground shrink-0">
-              Press Enter for next
-            </span>
+
+          {/* Answered checkmark */}
+          {isFilled && (
+            <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
           )}
         </div>
+
+        {/* Jump to next skipped button — only shows when there are unanswered questions */}
+        {nextSkipped !== null && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-9 px-3 text-xs shrink-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+            onClick={() => onChangeIndex(nextSkipped)}
+            title="Jump to next unanswered question"
+          >
+            Next unanswered
+          </Button>
+        )}
 
         {/* Next button */}
         <Button
           size="sm"
           variant={activeIndex < questions.length - 1 ? "outline" : "default"}
-          className="h-8 px-3 shrink-0"
+          className="h-9 px-4 shrink-0"
           disabled={activeIndex === questions.length - 1}
           onClick={() => onChangeIndex(activeIndex + 1)}
-          title="Next question"
         >
           {activeIndex < questions.length - 1 ? (
             <><span className="text-xs mr-1">Next</span><ChevronRight className="h-4 w-4" /></>
@@ -537,16 +624,16 @@ function SowEngineerPageInner() {
     //   try {
     //     return JSON.parse(saved) as TemplateData;
 
-    //   } catch { // use defaults }
+    //   } catch { /* use defaults */ }
     // }
     return DEFAULT_TEMPLATE;
     
   }, [searchParams]);
 
-  // Template structure - engineers cannot change this, only their content edits and field values
+  // Template structure — engineers cannot change this, only their content edits and field values
   const [data, setData] = useState<TemplateData>(initialData);
 
-  // Field values - maps field ID to the string the engineer typed in.
+  // Field values — maps field ID to the string the engineer typed in.
   // Stored separately from the template so we can merge on save.
   const [fieldValues, setFieldValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
@@ -657,7 +744,7 @@ function SowEngineerPageInner() {
     ));
   }
 
-  // Renders the left navigator panel - click to scroll, expand/collapse
+  // Renders the left navigator panel — click to scroll, expand/collapse
   function renderNav(sections: SectionNode[], depth = 0): React.ReactNode {
     return sections.map(section => {
       const hasChildren = section.children.length > 0;
@@ -706,12 +793,6 @@ function SowEngineerPageInner() {
             <span className="text-sm font-semibold">{data.documentName}</span>
           </div>
           <div className="flex items-center gap-3">
-            {/* Blank completion indicator */}
-            {totalBlanks > 0 && (
-              <span className={`text-xs ${filledBlanks === totalBlanks ? "text-green-600 font-medium" : "text-muted-foreground"}`}>
-                {filledBlanks}/{totalBlanks} fields filled
-              </span>
-            )}
             <Button variant="outline" size="sm" onClick={handleLoad}>
               <Download className="h-4 w-4 mr-1" /> Load Draft
             </Button>
@@ -721,7 +802,7 @@ function SowEngineerPageInner() {
           </div>
         </header>
 
-        {/* Questionnaire bar - sits below the main header, above the document */}
+        {/* Questionnaire bar — sits below the main header, above the document */}
         {questions.length > 0 && (
           <QuestionnaireBar
             questions={questions}
@@ -753,23 +834,23 @@ function SowEngineerPageInner() {
           <div className="flex-1 overflow-y-auto bg-gray-200 p-8">
             <div className="space-y-8">
 
-              {/* Cover page - read-only for engineers */}
+              {/* Cover page — read-only for engineers */}
               <div className="bg-white shadow-lg mx-auto relative text-black" style={{ width: "8.5in", height: "11in" }}>
                 <div className="absolute inset-8 border-4 border-black pointer-events-none" />
                 <div className="absolute inset-8 flex items-center justify-center">
                   <div className="text-center w-full px-12">
                     <p className="text-4xl font-bold">{data.coverPage.title}</p>
                     <p className="text-3xl font-semibold mt-6">FOR</p>
-                    <p className="text-4xl font-bold mt-4">{data.coverPage.clientName || "-"}</p>
+                    <p className="text-4xl font-bold mt-4">{data.coverPage.clientName || "—"}</p>
                     <div className="flex items-baseline justify-center gap-2 mt-4">
                       <span className="text-3xl font-semibold">BUILDING</span>
-                      <span className="text-3xl font-semibold">{data.coverPage.building || "-"}</span>
+                      <span className="text-3xl font-semibold">{data.coverPage.building || "—"}</span>
                     </div>
                     <div className="mt-16 space-y-3">
-                      <p className="text-xl">{data.coverPage.location || "-"}</p>
+                      <p className="text-xl">{data.coverPage.location || "—"}</p>
                       <p className="text-lg font-semibold mt-4">Prepared by</p>
-                      <p className="text-xl">{data.coverPage.preparedBy || "-"}</p>
-                      <p className="text-xl">{data.coverPage.department || "-"}</p>
+                      <p className="text-xl">{data.coverPage.preparedBy || "—"}</p>
+                      <p className="text-xl">{data.coverPage.department || "—"}</p>
                       <p className="text-xl mt-2">{data.coverPage.date}</p>
                     </div>
                   </div>
