@@ -566,7 +566,7 @@ function SowEditPageInner() {
         showPageNumbers: true, pageNumberPosition: "footer-right",
       },
       sections: [
-        { id: "sec-1", number: "1.0", title: "Scope of Work", content: "{{field_additional_scope_details_1776447594151}}", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [],
+        { id: "sec-1", number: "1.0", title: "Scope of Work", content: "{{field_additional_scope_details_1776447594151}} {{field_blank_1776733521924}}", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [],
           children: [
             { id: "sec-1-1", number: "1.1", title: "Scope", content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {YOUR PRODUCT}. The contractor should {do these things} and {provide this service}.", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
             { id: "sec-1-2", number: "1.2", title: "Background", content: "The {items to be purchased} are intended to be used at {a location} for {a purpose}. {the items} shoud be delivered to {a location} ", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
@@ -797,7 +797,7 @@ function SowEditPageInner() {
   const editingField = editingFieldId ? data.fields.find(f => f.id === editingFieldId) : null;
 
   const handleReturnToNewForm = () => {
-    router.push("/login");
+    router.push("/new");
   };
   
 
