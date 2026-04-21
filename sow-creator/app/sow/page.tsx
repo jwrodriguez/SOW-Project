@@ -1,19 +1,47 @@
 "use client";
 
-import React, { Suspense, useMemo, useState } from "react";
+import React, { Suspense, useMemo, useState, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Save, Download, FileText, ChevronRight, ChevronDown, Lock } from "lucide-react";
+import { Save, Download, FileText, ChevronRight, ChevronDown, Lock, ChevronLeft, CheckCircle2, Circle } from "lucide-react";
 import type { TemplateData, SectionNode, TemplateField, HeaderFooterData } from "@/types/pageTypes";
 
 // ─── Default blank template ───────────────────────────────────────────────────
 // Used when no draft or template is passed via URL. Engineers should normally
-// arrive here via a template link, not a blank page. This is a safe fallback.
+// arrive here by loading a JSON file saved from the admin edit page.
+//
+// Two types of editable content exist in this template:
+//
+// 1. UNLOCKED SECTIONS (locked: false) - engineers click and type freely.
+//    The text inside is just a hint showing what to write, not a real blank.
+//
+// 2. BLANKS in LOCKED SECTIONS - double curly {{field_id}} tokens match entries
+//    in data.fields. These appear in both the document as inline inputs AND in
+//    the questionnaire bar above. The admin creates these in the edit page using
+//    the blank insertion form. Filling one in updates both places simultaneously.
+//
+// This default template has sample blanks already set up so the questionnaire
+// bar is visible immediately. A real template saved from the admin editor replaces
+// these with its own fields and tokens.
 const DEFAULT_TEMPLATE: TemplateData = {
   documentName: "Untitled SOW",
-  fields: [],
+  // Each entry here is a blank the admin inserted via the blank form in the edit page.
+  // The id must exactly match the token embedded in the section content string below.
+  fields: [
+    { id: "field_product_name_001",       label: "Product Name",                    type: "text",      placeholder: "e.g. F-16 Avionics Suite",         required: true  },
+    { id: "field_contractor_tasks_002",    label: "Contractor Tasks",                type: "sentence",  placeholder: "e.g. install, maintain, and test",  required: true  },
+    { id: "field_contractor_service_003",  label: "Service Description",             type: "sentence",  placeholder: "e.g. provide 24/7 technical support",required: true  },
+    { id: "field_items_purchased_004",     label: "Items to be Purchased",           type: "text",      placeholder: "e.g. hydraulic actuators",          required: true  },
+    { id: "field_install_location_005",    label: "Installation Location",           type: "text",      placeholder: "e.g. Tinker AFB, Building 3001",    required: true  },
+    { id: "field_use_purpose_006",         label: "Purpose of Use",                  type: "sentence",  placeholder: "e.g. F-16 maintenance operations",  required: false },
+    { id: "field_delivery_location_007",   label: "Delivery Location",               type: "text",      placeholder: "e.g. Dock B, Building 3001",        required: false },
+    { id: "field_applicable_stds_008",     label: "Applicable Standards",            type: "paragraph", placeholder: "List any additional standards...",  required: false },
+    { id: "field_prohibited_mats_009",     label: "Prohibited Materials",            type: "paragraph", placeholder: "List any prohibited materials...",  required: false },
+    { id: "field_written_submittals_010",  label: "Written Submittals",              type: "paragraph", placeholder: "Describe required documentation...",required: false },
+    { id: "field_gfp_details_011",         label: "Government Furnished Property",   type: "paragraph", placeholder: "List any GFP items provided...",    required: false },
+  ],
   coverPage: {
     title: "Statement of Work",
     projectNumber: "SOW-2026-001",
@@ -37,25 +65,37 @@ const DEFAULT_TEMPLATE: TemplateData = {
     pageNumberPosition: "footer-right",
   },
   sections: [
-        { id: "sec-1", number: "1.0", title: "Scope of Work", content: "", locked: true, tables: [],
-          children: [
-            { id: "sec-1-1", number: "1.1", title: "Scope", content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {YOUR PRODUCT}. The contractor should {do these things} and {provide this service}.", locked: false, tables: [], children: [] },
-            { id: "sec-1-2", number: "1.2", title: "Background", content: "The {items to be purchased} are intended to be used at {a location} for {a purpose}. {the items} shoud be delivered to {a location} ", locked: false, tables: [], children: [] },
-          ]
+    {
+      id: "sec-1", number: "1.0", title: "Scope of Work", content: "", locked: true, tables: [],
+      children: [
+        // Unlocked - engineer edits freely. Blanks here are still filled via the questionnaire.
+        {
+          id: "sec-1-1", number: "1.1", title: "Scope", locked: false, tables: [], children: [],
+          content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {{field_product_name_001}}. The contractor should {{field_contractor_tasks_002}} and {{field_contractor_service_003}}.",
         },
-        { id: "sec-2", number: "2.0", title: "Applicable Standards", content: "Contractor, at a minimum, is required to comply with the current editions of the following requirements for design, construction, installation, and safety as applicable. The term “most recent edition” shall be understood to mean “most recently released edition as of date of issuance of contract.” ", locked: true, tables: [],
-          children: [
-            { id: "sec-2-1", number: "2.1", title: "Government Standards", content: "The following documents form a part of this purchase description to the extent stipulated herein.", locked: true, tables: [], children: [] },
-            { id: "sec-2-2", number: "2.2", title: "Non-Government Standards", content: "The following documents form a part of this document to the extent stipulated herein. ", locked: true, tables: [], children: [] },
-            { id: "sec-2-3", number: "2.3", title: "Order of Precedence", content: "In the event of a conflict between the test of this specification and the references cited herein, the test of this specification takes precedence. Nothing in this document, however, supersedes applicable laws and regulations unless a specific exception has been obtained.", locked: true, tables: [], children: [] },
-            { id: "sec-2-4", number: "2.4", title: "Applicable Standards", content: "", locked: false, tables: [], children: [] },
-            { id: "sec-2-5", number: "2.5", title: "Prohibited Materials", content: "", locked: false, tables: [], children: [] },
-            { id: "sec-2-6", number: "2.6", title: "Environmental Protection", content: "Under the operating, service, transportation and storage conditions described herein the machine shall not emit materials hazardous to the ecological system as prohibited by federal, state or local statutes in effect at the point of installation. ", locked: true, tables: [], children: [] },
-          ]
+        {
+          id: "sec-1-2", number: "1.2", title: "Background", locked: false, tables: [], children: [],
+          content: "The {{field_items_purchased_004}} are intended to be used at {{field_install_location_005}} for {{field_use_purpose_006}}. The items should be delivered to {{field_delivery_location_007}}.",
         },
-        { id: "sec-3", number: "3.0", title: "Written Submittals", content: "", locked: false, tables: [], children: [] },
-        { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "", locked: false, tables: [], children: [] },
       ],
+    },
+    {
+      id: "sec-2", number: "2.0", title: "Applicable Standards", locked: true, tables: [],
+      content: "Contractor, at a minimum, is required to comply with the current editions of the following requirements for design, construction, installation, and safety as applicable.",
+      children: [
+        { id: "sec-2-1", number: "2.1", title: "Government Standards",    content: "The following documents form a part of this purchase description to the extent stipulated herein.",  locked: true, tables: [], children: [] },
+        { id: "sec-2-2", number: "2.2", title: "Non-Government Standards", content: "The following documents form a part of this document to the extent stipulated herein.",              locked: true, tables: [], children: [] },
+        { id: "sec-2-3", number: "2.3", title: "Order of Precedence",      content: "In the event of a conflict between the text of this specification and the references cited herein, the text of this specification takes precedence.", locked: true, tables: [], children: [] },
+        // Locked with blank - engineer fills via questionnaire bar or inline input
+        { id: "sec-2-4", number: "2.4", title: "Applicable Standards",    content: "{{field_applicable_stds_008}}",   locked: true, tables: [], children: [] },
+        { id: "sec-2-5", number: "2.5", title: "Prohibited Materials",    content: "{{field_prohibited_mats_009}}",    locked: true, tables: [], children: [] },
+        { id: "sec-2-6", number: "2.6", title: "Environmental Protection", content: "Under the operating, service, transportation and storage conditions described herein the machine shall not emit materials hazardous to the ecological system as prohibited by federal, state or local statutes in effect at the point of installation.", locked: true, tables: [], children: [] },
+      ],
+    },
+    // Locked with blanks - lock states now match the admin edit page defaults
+    { id: "sec-3", number: "3.0", title: "Written Submittals",                       content: "{{field_written_submittals_010}}", locked: true, tables: [], children: [] },
+    { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "{{field_gfp_details_011}}",        locked: true, tables: [], children: [] },
+  ],
 };
 
 // ─── TOC generator ───────────────────────────────────────────────────────────
@@ -78,7 +118,7 @@ function generateTOCEntries(sections: SectionNode[], depth = 0, startPage = 3) {
 
 // ─── Inline blank input ───────────────────────────────────────────────────────
 // Renders a single blank field as an inline input inside section text.
-// Engineers type directly into these — no colored chip, just a clean input.
+// Engineers type directly into these - no colored chip, just a clean input.
 function BlankInput({ field, value, onChange }: {
   field: TemplateField;
   value: string;
@@ -150,13 +190,13 @@ function EngineerSectionContent({ content, fields, fieldValues, locked, onChange
     </div>
   );
 
-  // Locked sections show static text with fillable blank inputs — no text editing
+  // Locked sections show static text with fillable blank inputs - no text editing
   if (locked) {
     return <div className="px-1">{renderedContent}</div>;
   }
 
   // Unlocked sections are click-to-edit. While editing, show raw textarea.
-  // Blank chips are not shown in edit mode — engineer edits raw content string.
+  // Blank chips are not shown in edit mode - engineer edits raw content string.
   // When they click away, the rendered view with blanks comes back.
   return editing ? (
     <textarea
@@ -198,7 +238,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
 
   return (
     <div id={section.id} style={{ marginLeft: `${indent}px`, marginBottom: depth === 0 ? "2rem" : "1.25rem" }}>
-      {/* Section heading — read-only for engineers, lock icon shown when locked */}
+      {/* Section heading - read-only for engineers, lock icon shown when locked */}
       <div className="flex items-baseline gap-2 mb-1">
         {section.locked && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
         <span className="font-mono text-gray-400 shrink-0 text-sm select-none">{section.number}</span>
@@ -217,7 +257,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
         />
       </div>
 
-      {/* Tables — read-only for engineers */}
+      {/* Tables - read-only for engineers */}
       {section.tables && section.tables.length > 0 && (
         <div style={{ marginLeft: `${32}px` }} className="mt-3 space-y-4">
           {section.tables.map(table => (
@@ -227,7 +267,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
                   <tr key={ri}>
                     {row.map((cell, ci) => (
                       <td key={ci} className="border border-gray-300 p-1.5 text-sm">
-                        {cell || <span className="text-gray-300">—</span>}
+                        {cell || <span className="text-gray-300">-</span>}
                       </td>
                     ))}
                   </tr>
@@ -245,7 +285,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
 
 // ─── Document page wrapper ────────────────────────────────────────────────────
 // Renders an 8.5x11in white page with static header and footer.
-// Engineers cannot edit the header or footer — those are admin-controlled.
+// Engineers cannot edit the header or footer - those are admin-controlled.
 function DocumentPage({ hf, pageNumber, children }: {
   hf: HeaderFooterData;
   pageNumber: number;
@@ -256,7 +296,7 @@ function DocumentPage({ hf, pageNumber, children }: {
 
   return (
     <div className="bg-white shadow-lg mx-auto text-black" style={{ width: "8.5in", minHeight: "11in", display: "flex", flexDirection: "column" }}>
-      {/* Header — static, not editable by engineers */}
+      {/* Header - static, not editable by engineers */}
       <div style={{ padding: "0.5in 1in 0.1in 1in" }}>
         <div className="grid grid-cols-3 gap-1 text-sm text-gray-700">
           <div className="whitespace-pre-wrap">{hf.headerLeft}</div>
@@ -268,7 +308,7 @@ function DocumentPage({ hf, pageNumber, children }: {
       {/* Body */}
       <div style={{ padding: "0.1in 1in", flex: 1 }}>{children}</div>
 
-      {/* Footer — static, {PAGE} resolved */}
+      {/* Footer - static, {PAGE} resolved */}
       <div style={{ padding: "0.1in 1in 0.5in 1in" }}>
         <div className="grid grid-cols-3 gap-1 text-sm text-gray-700">
           <div className="whitespace-pre-wrap">{resolve(hf.footerLeft)}</div>
@@ -288,6 +328,190 @@ function updateSectionContent(sections: SectionNode[], id: string, content: stri
     s.id === id
       ? { ...s, content }
       : { ...s, children: updateSectionContent(s.children, id, content) }
+  );
+}
+
+// ─── Questionnaire helpers ────────────────────────────────────────────────────
+
+// Represents one question in the questionnaire bar - a blank field with
+// the section context it belongs to so the bar can show where it lives.
+type QuestionItem = {
+  field: TemplateField;
+  sectionId: string;
+  sectionNumber: string;
+  sectionTitle: string;
+};
+
+// Walks the section tree in document order and builds a flat ordered list
+// of questions by finding every {{field_id}} token in section content strings.
+// Fields that appear multiple times are deduplicated - first occurrence wins.
+// This preserves the reading order of the document which is the natural
+// questionnaire order for the engineer.
+function buildQuestionList(sections: SectionNode[], fields: TemplateField[]): QuestionItem[] {
+  const fieldMap = new Map(fields.map(f => [f.id, f]));
+  const seen = new Set<string>();
+  const questions: QuestionItem[] = [];
+  const regex = /\{\{([^}]+)\}\}/g;
+
+  function walk(nodes: SectionNode[]) {
+    for (const section of nodes) {
+      // Reset regex lastIndex for each content string
+      regex.lastIndex = 0;
+      let match;
+      while ((match = regex.exec(section.content)) !== null) {
+        const fieldId = match[1];
+        if (!seen.has(fieldId) && fieldMap.has(fieldId)) {
+          seen.add(fieldId);
+          questions.push({
+            field: fieldMap.get(fieldId)!,
+            sectionId: section.id,
+            sectionNumber: section.number,
+            sectionTitle: section.title,
+          });
+        }
+      }
+      if (section.children.length > 0) walk(section.children);
+    }
+  }
+
+  walk(sections);
+  return questions;
+}
+
+// ─── Questionnaire bar ────────────────────────────────────────────────────────
+// Sticky panel below the main header. Shows one question at a time with
+// prev/next navigation and a dropdown to jump to any question.
+// The input here calls onChangeField - same handler as the inline BlankInputs -
+// so the document preview updates live as the engineer types.
+function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, onChangeIndex }: {
+  questions: QuestionItem[];
+  activeIndex: number;
+  fieldValues: Record<string, string>;
+  onChangeField: (fieldId: string, value: string) => void;
+  onChangeIndex: (index: number) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
+
+  // Focus the input whenever the active question changes
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [activeIndex]);
+
+  if (questions.length === 0) return null;
+
+  const current = questions[activeIndex];
+  const value = fieldValues[current.field.id] ?? current.field.defaultValue ?? "";
+  const filledCount = questions.filter(q => (fieldValues[q.field.id] ?? q.field.defaultValue ?? "").trim() !== "").length;
+  const isFilled = value.trim() !== "";
+
+  function handleKey(e: React.KeyboardEvent) {
+    if (e.key === "Enter" && activeIndex < questions.length - 1) {
+      e.preventDefault();
+      onChangeIndex(activeIndex + 1);
+    }
+  }
+
+  return (
+    <div className="shrink-0 border-b bg-background/95 backdrop-blur px-4 py-3 z-20">
+      {/* Top row - question counter, section badge, progress */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          {/* Dropdown to jump to any question */}
+          <select
+            value={activeIndex}
+            onChange={e => onChangeIndex(Number(e.target.value))}
+            className="text-xs border border-input rounded px-2 py-1 bg-background outline-none focus:border-primary cursor-pointer"
+          >
+            {questions.map((q, i) => (
+              <option key={q.field.id} value={i}>
+                Q{i + 1} - {q.sectionNumber} {q.field.label}
+              </option>
+            ))}
+          </select>
+          {/* Section context badge */}
+          <span className="text-xs bg-primary/10 text-primary font-mono px-2 py-0.5 rounded">
+            {current.sectionNumber}
+          </span>
+          <span className="text-xs text-muted-foreground truncate max-w-[200px]">
+            {current.sectionTitle}
+          </span>
+        </div>
+        {/* Progress indicator */}
+        <div className="flex items-center gap-2">
+          {isFilled
+            ? <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+            : <Circle className="h-3.5 w-3.5 text-muted-foreground" />
+          }
+          <span className={`text-xs font-medium ${filledCount === questions.length ? "text-green-600" : "text-muted-foreground"}`}>
+            {filledCount}/{questions.length} answered
+          </span>
+        </div>
+      </div>
+
+      {/* Bottom row - question label, input, prev/next */}
+      <div className="flex items-center gap-3">
+        {/* Prev button */}
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-8 px-2 shrink-0"
+          disabled={activeIndex === 0}
+          onClick={() => onChangeIndex(activeIndex - 1)}
+          title="Previous question"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+
+        {/* Question label + input */}
+        <div className="flex-1 flex items-center gap-3 min-w-0">
+          <label className="text-sm font-medium shrink-0 flex items-center gap-1">
+            {current.field.required && <span className="text-destructive text-xs">*</span>}
+            {current.field.label}
+          </label>
+          {current.field.type === "paragraph" ? (
+            <textarea
+              ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+              value={value}
+              onChange={e => onChangeField(current.field.id, e.target.value)}
+              placeholder={current.field.placeholder || `Enter ${current.field.label.toLowerCase()}...`}
+              rows={2}
+              className="flex-1 border border-input rounded px-3 py-1.5 text-sm bg-background outline-none focus:border-primary resize-none"
+            />
+          ) : (
+            <input
+              ref={inputRef as React.RefObject<HTMLInputElement>}
+              type={current.field.type === "number" ? "number" : current.field.type === "date" ? "date" : "text"}
+              value={value}
+              onChange={e => onChangeField(current.field.id, e.target.value)}
+              onKeyDown={handleKey}
+              placeholder={current.field.placeholder || `Enter ${current.field.label.toLowerCase()}...`}
+              className="flex-1 h-8 border border-input rounded px-3 text-sm bg-background outline-none focus:border-primary"
+            />
+          )}
+          {current.field.type !== "paragraph" && (
+            <span className="text-xs text-muted-foreground shrink-0">
+              Press Enter for next
+            </span>
+          )}
+        </div>
+
+        {/* Next button */}
+        <Button
+          size="sm"
+          variant={activeIndex < questions.length - 1 ? "outline" : "default"}
+          className="h-8 px-3 shrink-0"
+          disabled={activeIndex === questions.length - 1}
+          onClick={() => onChangeIndex(activeIndex + 1)}
+          title="Next question"
+        >
+          {activeIndex < questions.length - 1 ? (
+            <><span className="text-xs mr-1">Next</span><ChevronRight className="h-4 w-4" /></>
+          ) : (
+            <span className="text-xs">Done</span>
+          )}
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -313,16 +537,16 @@ function SowEngineerPageInner() {
     //   try {
     //     return JSON.parse(saved) as TemplateData;
 
-    //   } catch { /* use defaults */ }
+    //   } catch { // use defaults }
     // }
     return DEFAULT_TEMPLATE;
     
   }, [searchParams]);
 
-  // Template structure — engineers cannot change this, only their content edits and field values
+  // Template structure - engineers cannot change this, only their content edits and field values
   const [data, setData] = useState<TemplateData>(initialData);
 
-  // Field values — maps field ID to the string the engineer typed in.
+  // Field values - maps field ID to the string the engineer typed in.
   // Stored separately from the template so we can merge on save.
   const [fieldValues, setFieldValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
@@ -334,6 +558,24 @@ function SowEngineerPageInner() {
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
     new Set(initialData.sections.map(s => s.id))
   );
+
+  // Active question index for the questionnaire bar.
+  // When the engineer moves to a new question the document scrolls to that section.
+  const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
+
+  // Ordered list of questions derived from the section tree and fields array.
+  // Recomputed whenever data changes (e.g. after loading a new draft).
+  const questions = useMemo(() => buildQuestionList(data.sections, data.fields), [data.sections, data.fields]);
+
+  // Scrolls to the section containing the active question so the engineer
+  // can see where the blank lives in the document while answering in the bar.
+  function handleChangeQuestionIndex(index: number) {
+    setActiveQuestionIndex(index);
+    const question = questions[index];
+    if (question) {
+      document.getElementById(question.sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
 
   function toggleExpand(id: string) {
     setExpandedIds(prev => {
@@ -415,7 +657,7 @@ function SowEngineerPageInner() {
     ));
   }
 
-  // Renders the left navigator panel — click to scroll, expand/collapse
+  // Renders the left navigator panel - click to scroll, expand/collapse
   function renderNav(sections: SectionNode[], depth = 0): React.ReactNode {
     return sections.map(section => {
       const hasChildren = section.children.length > 0;
@@ -479,6 +721,17 @@ function SowEngineerPageInner() {
           </div>
         </header>
 
+        {/* Questionnaire bar - sits below the main header, above the document */}
+        {questions.length > 0 && (
+          <QuestionnaireBar
+            questions={questions}
+            activeIndex={activeQuestionIndex}
+            fieldValues={fieldValues}
+            onChangeField={handleChangeField}
+            onChangeIndex={handleChangeQuestionIndex}
+          />
+        )}
+
         {/* Body */}
         <div className="flex flex-1 overflow-hidden">
 
@@ -500,23 +753,23 @@ function SowEngineerPageInner() {
           <div className="flex-1 overflow-y-auto bg-gray-200 p-8">
             <div className="space-y-8">
 
-              {/* Cover page — read-only for engineers */}
+              {/* Cover page - read-only for engineers */}
               <div className="bg-white shadow-lg mx-auto relative text-black" style={{ width: "8.5in", height: "11in" }}>
                 <div className="absolute inset-8 border-4 border-black pointer-events-none" />
                 <div className="absolute inset-8 flex items-center justify-center">
                   <div className="text-center w-full px-12">
                     <p className="text-4xl font-bold">{data.coverPage.title}</p>
                     <p className="text-3xl font-semibold mt-6">FOR</p>
-                    <p className="text-4xl font-bold mt-4">{data.coverPage.clientName || "—"}</p>
+                    <p className="text-4xl font-bold mt-4">{data.coverPage.clientName || "-"}</p>
                     <div className="flex items-baseline justify-center gap-2 mt-4">
                       <span className="text-3xl font-semibold">BUILDING</span>
-                      <span className="text-3xl font-semibold">{data.coverPage.building || "—"}</span>
+                      <span className="text-3xl font-semibold">{data.coverPage.building || "-"}</span>
                     </div>
                     <div className="mt-16 space-y-3">
-                      <p className="text-xl">{data.coverPage.location || "—"}</p>
+                      <p className="text-xl">{data.coverPage.location || "-"}</p>
                       <p className="text-lg font-semibold mt-4">Prepared by</p>
-                      <p className="text-xl">{data.coverPage.preparedBy || "—"}</p>
-                      <p className="text-xl">{data.coverPage.department || "—"}</p>
+                      <p className="text-xl">{data.coverPage.preparedBy || "-"}</p>
+                      <p className="text-xl">{data.coverPage.department || "-"}</p>
                       <p className="text-xl mt-2">{data.coverPage.date}</p>
                     </div>
                   </div>
