@@ -105,11 +105,11 @@ def add_sections(doc: Document, sections: list[SectionNode], field_map: dict[str
     heading_level = min(depth + 1, 3)
 
     for section in sections:
-        # Section heading — number + title
+        # Section heading - number + title
         heading_text = f"{section.number}  {section.title}"
         doc.add_heading(heading_text, level=heading_level)
 
-        # Section body — resolve any {{tokens}} to their filled values
+        # Section body - resolve any {{tokens}} to their filled values
         if section.content.strip():
             resolved = resolve_tokens(section.content, field_map)
             para = doc.add_paragraph(resolved)
@@ -163,7 +163,7 @@ async def generate_docx(template: TemplateData):
 
         client_para = doc.add_paragraph()
         client_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        client_run = client_para.add_run(cover.clientName.upper() if cover.clientName else "—")
+        client_run = client_para.add_run(cover.clientName.upper() if cover.clientName else "-")
         client_run.bold = True
         client_run.font.size = Pt(18)
 
@@ -203,12 +203,12 @@ async def generate_docx(template: TemplateData):
 
         cover_sectPr = OxmlElement("w:sectPr")
 
-        # Vertical centering — centers cover content between top and bottom margins
+        # Vertical centering - centers cover content between top and bottom margins
         vAlign = OxmlElement("w:vAlign")
         vAlign.set(qn("w:val"), "center")
         cover_sectPr.append(vAlign)
 
-        # Page border — single black 3pt border on all four sides, cover page only
+        # Page border - single black 3pt border on all four sides, cover page only
         pgBorders = OxmlElement("w:pgBorders")
         pgBorders.set(qn("w:offsetFrom"), "page")
         for side in ("w:top", "w:left", "w:bottom", "w:right"):
@@ -236,7 +236,7 @@ async def generate_docx(template: TemplateData):
         # ── Document sections ─────────────────────────────────────────────────
         add_sections(doc, template.sections, field_map, depth=0)
 
-        # ── Header and footer (Section 2 — all pages after cover) ─────────────
+        # ── Header and footer (Section 2 - all pages after cover) ─────────────
         # Tab stops position left/center/right text in a single paragraph
         # without tables so no visible borders appear.
         hf = template.headerFooter
