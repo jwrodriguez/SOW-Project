@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Save, Download, FileText, ChevronRight, ChevronDown, Lock, ChevronLeft, CheckCircle2, Circle } from "lucide-react";
+import { Save, Download, FileText, ChevronRight, ChevronDown, Lock, ChevronLeft, CheckCircle2, Circle, FileDown } from "lucide-react";
 import type { TemplateData, SectionNode, TemplateField, HeaderFooterData } from "@/types/pageTypes";
 
 // ─── Default blank template ───────────────────────────────────────────────────
@@ -684,6 +684,7 @@ function SowEngineerPageInner() {
 
   // Saves a draft by merging field values back into the template fields
   // and downloading the result as a JSON file the engineer can reload later.
+  // This is a temporary testing tool — will be removed once export to Word is the primary output.
   function handleSave() {
     const merged: TemplateData = {
       ...data,
@@ -699,6 +700,49 @@ function SowEngineerPageInner() {
     a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}-draft-${new Date().toISOString().split("T")[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  // Exports the completed SOW as a Word document via the FastAPI docx service.
+  // Merges fieldValues into fields[].defaultValue before sending so the Python
+  // service receives a complete document with all engineer answers baked in.
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const merged: TemplateData = {
+        ...data,
+        fields: data.fields.map(f => ({
+          ...f,
+          defaultValue: fieldValues[f.id] ?? f.defaultValue,
+        })),
+      };
+
+      const response = await fetch("/api/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(merged),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        alert(`Export failed: ${err.error ?? "Unknown error"}`);
+        return;
+      }
+
+      // Trigger browser download of the returned .docx file
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("Export failed — make sure the document service is running.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   // Loads a previously saved draft JSON file
@@ -796,8 +840,12 @@ function SowEngineerPageInner() {
             <Button variant="outline" size="sm" onClick={handleLoad}>
               <Download className="h-4 w-4 mr-1" /> Load Draft
             </Button>
-            <Button size="sm" onClick={handleSave}>
+            <Button variant="outline" size="sm" onClick={handleSave}>
               <Save className="h-4 w-4 mr-1" /> Save Draft
+            </Button>
+            <Button size="sm" onClick={handleExport} disabled={exporting}>
+              <FileDown className="h-4 w-4 mr-1" />
+              {exporting ? "Exporting..." : "Export Word"}
             </Button>
           </div>
         </header>
