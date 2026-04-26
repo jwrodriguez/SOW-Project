@@ -1,5 +1,5 @@
 /**
- * Export API route — receives merged TemplateData from the SOW engineer page,
+ * Export API route - receives merged TemplateData from the SOW engineer page,
  * forwards it to the FastAPI docx service, and streams the .docx back to the browser.
  *
  * The engineer page merges fieldValues into fields[].defaultValue before calling
@@ -20,11 +20,11 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
 
-    // Basic presence check — the Python service does full Pydantic validation
+    // Basic presence check - the Python service does full Pydantic validation
     // but we catch obviously missing fields early to return a clear error.
     if (!body.documentName || !body.sections || !body.coverPage) {
       return NextResponse.json(
-        { error: "Invalid template data — missing required fields." },
+        { error: "Invalid template data - missing required fields." },
         { status: 400 }
       );
     }
