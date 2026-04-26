@@ -105,11 +105,11 @@ def add_sections(doc: Document, sections: list[SectionNode], field_map: dict[str
     heading_level = min(depth + 1, 3)
 
     for section in sections:
-        # Section heading - number + title
+        # Section heading — number + title
         heading_text = f"{section.number}  {section.title}"
         doc.add_heading(heading_text, level=heading_level)
 
-        # Section body - resolve any {{tokens}} to their filled values
+        # Section body — resolve any {{tokens}} to their filled values
         if section.content.strip():
             resolved = resolve_tokens(section.content, field_map)
             para = doc.add_paragraph(resolved)
@@ -163,7 +163,7 @@ async def generate_docx(template: TemplateData):
 
         client_para = doc.add_paragraph()
         client_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        client_run = client_para.add_run(cover.clientName.upper() if cover.clientName else "-")
+        client_run = client_para.add_run(cover.clientName.upper() if cover.clientName else "—")
         client_run.bold = True
         client_run.font.size = Pt(18)
 
@@ -203,12 +203,12 @@ async def generate_docx(template: TemplateData):
 
         cover_sectPr = OxmlElement("w:sectPr")
 
-        # Vertical centering - centers cover content between top and bottom margins
+        # Vertical centering — centers cover content between top and bottom margins
         vAlign = OxmlElement("w:vAlign")
         vAlign.set(qn("w:val"), "center")
         cover_sectPr.append(vAlign)
 
-        # Page border - single black 3pt border on all four sides, cover page only
+        # Page border — single black 3pt border on all four sides, cover page only
         pgBorders = OxmlElement("w:pgBorders")
         pgBorders.set(qn("w:offsetFrom"), "page")
         for side in ("w:top", "w:left", "w:bottom", "w:right"):
@@ -223,20 +223,49 @@ async def generate_docx(template: TemplateData):
         cover_pPr.append(cover_sectPr)
         cover_break_para._p.append(cover_pPr)
 
-        # ── Table of Contents placeholder ─────────────────────────────────────
+        # ── Table of Contents with real Word TOC field ────────────────────────
+        # Inserts a proper TOC field that Word recognizes and can update.
+        # When the engineer opens the document they press Ctrl+A then F9
+        # to update all fields which generates the real TOC automatically.
         doc.add_heading("Table of Contents", level=1)
-        toc_note = doc.add_paragraph(
-            "[Right-click this area in Word and select 'Update Field' "
-            "to generate the Table of Contents]"
-        )
-        toc_note.runs[0].italic = True
-        toc_note.runs[0].font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+
+        # The TOC field uses a fldChar/instrText sequence that Word reads
+        # and builds into a real TOC from the document headings.
+        # \o "1-3" includes heading levels 1 through 3
+        # \h makes entries into hyperlinks
+        # \z hides tab leader in web layout
+        # \u uses the applied paragraph outline level
+        # dirty="true" tells Word to update the field when the document opens
+        toc_para = doc.add_paragraph()
+
+        run1 = toc_para.add_run()
+        fldChar_begin = OxmlElement("w:fldChar")
+        fldChar_begin.set(qn("w:fldCharType"), "begin")
+        fldChar_begin.set(qn("w:dirty"), "true")
+        run1._r.append(fldChar_begin)
+
+        run2 = toc_para.add_run()
+        instrText = OxmlElement("w:instrText")
+        instrText.set("{http://www.w3.org/XML/1998/namespace}space", "preserve")
+        instrText.text = ' TOC \\o "1-3" \\h \\z \\u '
+        run2._r.append(instrText)
+
+        run3 = toc_para.add_run()
+        fldChar_end = OxmlElement("w:fldChar")
+        fldChar_end.set(qn("w:fldCharType"), "end")
+        run3._r.append(fldChar_end)
+
+        note = doc.add_paragraph("Press Ctrl+A then F9 to generate the Table of Contents.")
+        note.runs[0].italic = True
+        note.runs[0].font.size = Pt(9)
+        note.runs[0].font.color.rgb = RGBColor(0x88, 0x88, 0x88)
+
         doc.add_page_break()
 
         # ── Document sections ─────────────────────────────────────────────────
         add_sections(doc, template.sections, field_map, depth=0)
 
-        # ── Header and footer (Section 2 - all pages after cover) ─────────────
+        # ── Header and footer (Section 2 — all pages after cover) ─────────────
         # Tab stops position left/center/right text in a single paragraph
         # without tables so no visible borders appear.
         hf = template.headerFooter
