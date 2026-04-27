@@ -11,18 +11,25 @@
  */
 "use client";
 
-import React, { Suspense, useMemo, useState, useEffect} from "react";
-import { useSearchParams } from "next/navigation";
+import React, { Suspense, useMemo, useState, useCallback, useRef, useEffect } from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useSession } from "@/lib/auth-client";
+import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useSession } from "@/lib/auth-client";
-import { useRouter } from "next/navigation";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Toggle } from "@/components/ui/toggle";
+import { Separator } from "@/components/ui/separator";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import {
   Plus, Trash2, Download, Save, FileText, ChevronRight, ChevronDown,
   ListOrdered, Edit2, Table as TableIcon, Lock, Unlock, GripVertical,
   X, Check, PlusCircle, type LucideIcon,
+  Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter,
+  AlignRight, AlignJustify, List, IndentIncrease, IndentDecrease,
+  Undo2, Redo2, Type, Highlighter, Minus, Upload, Eraser,
 } from "lucide-react";
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -34,15 +41,43 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 // ============= TYPES =============
-// You can find Type Declarations and Descriptions used in .../types/pageTypes.ts
-import {FieldType, TemplateField, SectionNode, TableData, HeaderFooterData, TemplateData} from "@/types/pageTypes";
+// TypeScript type definitions for every data shape in this file.
+// FieldType is the set of allowed blank field types.
+// TemplateField describes one fillable blank slot inserted into section content.
+// SectionNode is recursive — children: SectionNode[] enables nested subsections.
+// locked: boolean on SectionNode controls whether the section is editable.
+// TemplateData is the top-level document object that gets serialized to JSON on Save.
+type FieldType = "text" | "number" | "word" | "sentence" | "paragraph" | "list" | "date" | "dropdown";
+type TemplateField = {
+  id: string; label: string; type: FieldType;
+  defaultValue?: string; placeholder?: string; required?: boolean; options?: string[];
+};
+type SectionNode = {
+  id: string; number: string; title: string; content: string;
+  locked: boolean; tables?: TableData[]; children: SectionNode[];
+};
+type TableData = { id: string; rows: number; cols: number; data: string[][] };
+type CoverPageData = {
+  title: string; projectNumber: string; clientName: string; building: string;
+  location: string; preparedBy: string; department: string; date: string;
+  version: string; confidentiality: string;
+};
+type HeaderFooterData = {
+  headerLeft: string; headerCenter: string; headerRight: string;
+  footerLeft: string; footerCenter: string; footerRight: string;
+  showPageNumbers: boolean; pageNumberPosition: "footer-center" | "footer-right" | "footer-left";
+};
+type TemplateData = {
+  documentName: string; fields: TemplateField[];
+  coverPage: CoverPageData; headerFooter: HeaderFooterData; sections: SectionNode[];
+};
 
 // Allowed field types listed here so both the insert form and edit form share the same options
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "text", label: "Text" }, { value: "number", label: "Number" },
   { value: "word", label: "Word" }, { value: "sentence", label: "Sentence" },
   { value: "paragraph", label: "Paragraph" }, { value: "list", label: "List" },
-  { value: "date", label: "Date" },
+  { value: "date", label: "Date" }, { value: "dropdown", label: "Dropdown" },
 ];
 
 // ============= RIBBON BUTTON =============
@@ -51,17 +86,209 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
 function RibbonBtn({ icon: Icon, label, onClick, disabled, active, danger }: {
   icon: LucideIcon; label: string; onClick?: () => void; disabled?: boolean; active?: boolean; danger?: boolean;
 }) {
-  return (
-    <button onClick={onClick} disabled={disabled} title={label}
-      className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded text-[10px] transition-colors
-        ${disabled ? "opacity-30 cursor-not-allowed" : "hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer"}
-        ${active ? "bg-primary/10 text-primary" : ""}
-        ${danger ? "text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" : ""}`}>
+  const content = (
+    <>
       <Icon className="h-4 w-4" />
-      <span className="leading-none">{label}</span>
-    </button>
+      <span className="text-[10px] leading-none">{label}</span>
+    </>
+  );
+
+  // If component is a true/false toggle (e.g. Bold)
+  if (active !== undefined) {
+    return (
+      <Toggle pressed={active} onPressedChange={onClick} disabled={disabled} title={label}
+        onMouseDown={e => e.preventDefault()}
+        className={`flex flex-col items-center gap-0.5 h-auto py-1 px-2 rounded-sm ${danger ? "text-destructive hover:text-destructive hover:bg-destructive/10" : ""} data-[state=on]:bg-primary/20 data-[state=on]:text-primary`}
+        size="sm">
+        {content}
+      </Toggle>
+    );
+  }
+
+  // Otherwise, normal push-button
+  return (
+    <Button variant="ghost" size="sm" onClick={onClick} disabled={disabled} title={label}
+      onMouseDown={e => e.preventDefault()}
+      className={`flex flex-col items-center gap-0.5 h-auto py-1 px-2 rounded-sm ${danger ? "text-destructive hover:text-destructive hover:bg-destructive/10" : ""}`}>
+      {content}
+    </Button>
   );
 }
+
+// ============= RIBBON GROUP =============
+// Groups controls under a labeled section like Word's ribbon groups.
+function RibbonGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="ribbon-group flex flex-col items-center px-1.5 py-0.5 gap-0.5">
+      <div className="ribbon-group-controls flex flex-row items-center gap-px flex-1">{children}</div>
+      <span className="ribbon-group-label text-[9px] uppercase tracking-wider text-muted-foreground text-center select-none whitespace-nowrap">{label}</span>
+    </div>
+  );
+}
+
+// Font families and sizes for the ribbon dropdowns
+const FONT_FAMILIES = [
+  "Arial", "Times New Roman", "Calibri", "Georgia", "Courier New",
+  "Verdana", "Trebuchet MS", "Garamond", "Tahoma",
+];
+const FONT_SIZE_MAP: { label: string; value: string }[] = [
+  { label: "8", value: "1" }, { label: "10", value: "2" },
+  { label: "12", value: "3" }, { label: "14", value: "4" },
+  { label: "18", value: "5" }, { label: "24", value: "6" },
+  { label: "36", value: "7" },
+];
+type RibbonTab = "home" | "insert" | "layout";
+
+// ============= FONT SIZE INPUT =============
+function FontSizeInput({ formatState, restoreSelection, handleFormat }: {
+  formatState: any, restoreSelection: () => void, handleFormat: (c: string, v: string) => void
+}) {
+  const defaultLabel = FONT_SIZE_MAP.find(s => s.value === formatState.fontSize)?.label || "12";
+  const [localValue, setLocalValue] = useState(defaultLabel);
+
+  useEffect(() => {
+    setLocalValue(FONT_SIZE_MAP.find(s => s.value === formatState.fontSize)?.label || "12");
+  }, [formatState.fontSize]);
+
+  const commitValue = (val: string) => {
+    let sizeObj = FONT_SIZE_MAP.find(s => s.label === val);
+    if (!sizeObj) {
+      const numericVal = parseInt(val, 10);
+      if (!isNaN(numericVal)) {
+        let closest = FONT_SIZE_MAP[0];
+        let minDiff = Infinity;
+        for (const s of FONT_SIZE_MAP) {
+          const diff = Math.abs(parseInt(s.label) - numericVal);
+          if (diff < minDiff) { minDiff = diff; closest = s; }
+        }
+        sizeObj = closest;
+      }
+    }
+    
+    if (sizeObj) {
+      restoreSelection();
+      handleFormat("fontSize", sizeObj.value);
+    }
+    
+    setTimeout(() => { setLocalValue(sizeObj?.label || "12"); }, 50);
+  };
+
+  return (
+    <div className="relative">
+      <input 
+        list="font-sizes-list" 
+        value={localValue} 
+        onChange={e => { 
+          setLocalValue(e.target.value);
+          if (FONT_SIZE_MAP.some(s => s.label === e.target.value)) {
+            commitValue(e.target.value);
+          }
+        }}
+        onBlur={e => commitValue(e.target.value)}
+        onKeyDown={e => {
+          if (e.key === "Enter") {
+             e.preventDefault();
+             commitValue(localValue);
+             e.currentTarget.blur();
+          }
+        }}
+        className="h-7! w-[60px] text-[11px] rounded-md border border-input bg-transparent px-2 shadow-none outline-none focus:ring-0 hover:bg-accent" 
+      />
+      <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 opacity-50 pointer-events-none" />
+      <datalist id="font-sizes-list">
+        {FONT_SIZE_MAP.map(s => <option key={s.label} value={s.label} />)}
+      </datalist>
+    </div>
+  );
+}
+
+// ============= CONTENT EDITABLE BLOCK =============
+// Isolated contentEditable that React.memo never re-renders. This prevents React
+// from interfering with user-edited DOM content when parent state changes (e.g. formatState).
+//
+// Key design: onBlur does NOT exit editing mode. Instead, a click-outside listener
+// detects clicks outside both the editable AND the ribbon, and only then exits.
+// This ensures formatting buttons work without unmounting the contentEditable.
+const ContentEditableBlock = React.memo(function ContentEditableBlock({
+  initialHtml, onSave, onExit, className,
+}: {
+  initialHtml: string;
+  onSave: (html: string) => void;
+  onExit: () => void;
+  className: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const onSaveRef = useRef(onSave);
+  const onExitRef = useRef(onExit);
+  onSaveRef.current = onSave;
+  onExitRef.current = onExit;
+
+  // Set initial content on mount
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.innerHTML = initialHtml;
+      ref.current.focus();
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Click-outside detection: exit editing only when clicking outside
+  // BOTH the contentEditable AND the ribbon toolbar
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Ignore clicks inside this editable
+      if (ref.current && ref.current.contains(target)) return;
+      // Ignore clicks inside the ribbon (so formatting buttons don't exit editing)
+      if (target.closest(".editor-ribbon")) return;
+      // Click was outside both — save and exit
+      if (ref.current) onSaveRef.current(ref.current.innerHTML);
+      onExitRef.current();
+    };
+    // Use setTimeout so the initial click that opened editing doesn't immediately close it
+    const timer = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+    <div
+      ref={ref}
+      contentEditable
+      suppressContentEditableWarning
+      onPointerDown={e => e.stopPropagation()} // Stop dnd-kit from intercepting drag
+      onMouseDown={e => e.stopPropagation()}   // Stop parent from stealing focus/state
+      onClick={e => e.stopPropagation()}       // Stop parent onClick (which triggers onSelect)
+      onKeyDown={(e) => {
+        // Keyboard shortcuts for formatting (Cmd/Ctrl + key)
+        const mod = e.metaKey || e.ctrlKey;
+        if (mod) {
+          switch (e.key.toLowerCase()) {
+            case "b": e.preventDefault(); document.execCommand("bold"); break;
+            case "i": e.preventDefault(); document.execCommand("italic"); break;
+            case "u": e.preventDefault(); document.execCommand("underline"); break;
+            case "z":
+              e.preventDefault();
+              document.execCommand(e.shiftKey ? "redo" : "undo");
+              break;
+          }
+        }
+        // ESC exits editing
+        if (e.key === "Escape") {
+          e.preventDefault();
+          if (ref.current) onSaveRef.current(ref.current.innerHTML);
+          onExitRef.current();
+        }
+      }}
+      className={className}
+    />
+  );
+}, () => true); // Custom comparator: never re-render
 
 // ============= INLINE EDITING =============
 /**
@@ -117,21 +344,21 @@ export function EditableArea({ value, onChange, className = "", placeholder = "C
   placeholder?: string;
   disabled?: boolean;
 }) {
-  const [editing, setEditing] = useState(false);
-  if (disabled) return (
-    <div className={`px-1 whitespace-pre-wrap min-h-[1.2em] ${className}`}>
-      {value || <span className="text-gray-400 italic text-sm font-normal">{placeholder}</span>}
-    </div>
-  );
-  return editing ? (
-    <textarea autoFocus value={value} onChange={e => onChange(e.target.value)}
-      onBlur={() => setEditing(false)} rows={Math.max(3, (value.match(/\n/g) || []).length + 2)}
-      className={`bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full resize-none ${className}`} />
-  ) : (
-    <div onClick={() => setEditing(true)}
-      className={`cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 whitespace-pre-wrap min-h-[1.2em] ${className}`}>
-      {value || <span className="text-gray-400 italic text-sm font-normal">{placeholder}</span>}
-    </div>
+  if (disabled) {
+    return (
+      <div className={`px-1 whitespace-pre-wrap min-h-[1.2em] ${className}`}
+        dangerouslySetInnerHTML={{ __html: value || `<span class="text-gray-400 italic text-sm font-normal">${placeholder}</span>` }} />
+    );
+  }
+
+  // Always render ContentEditableBlock when enabled to prevent DOM swaps that break selection
+  return (
+    <ContentEditableBlock
+      initialHtml={value}
+      onSave={(html) => onChange(html)}
+      onExit={() => {}}
+      className={`content-editable-area bg-blue-50 border border-blue-300 rounded px-1 w-full ${className}`}
+    />
   );
 }
 /**
@@ -195,54 +422,43 @@ function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, 
 }) {
   const fieldMap = useMemo(() => new Map(fields.map(f => [f.id, f])), [fields]);
 
-  // Parse content into segments: text and {{field_id}} tokens
-  const segments = useMemo(() => {
-    const parts: Array<{ type: "text"; value: string } | { type: "blank"; fieldId: string }> = [];
-    const regex = /\{\{([^}]+)\}\}/g;
-    let last = 0;
-    let match;
-    while ((match = regex.exec(content)) !== null) {
-      if (match.index > last) parts.push({ type: "text", value: content.slice(last, match.index) });
-      parts.push({ type: "blank", fieldId: match[1] });
-      last = match.index + match[0].length;
-    }
-    if (last < content.length) parts.push({ type: "text", value: content.slice(last) });
-    if (parts.length === 0) parts.push({ type: "text", value: "" });
-    return parts;
-  }, [content]);
+  // Convert {{field_id}} to non-editable span chips with data attributes
+  const displayHtml = useMemo(() => {
+    return content.replace(/\{\{([^}]+)\}\}/g, (match, fieldId) => {
+      const field = fieldMap.get(fieldId);
+      if (!field) return `<span class="text-red-400">{{${fieldId}}}</span>`;
+      return `<span contenteditable="false" class="blank-chip" data-id="${field.id}" data-type="${field.type}"><span>${field.label}</span><span class="opacity-60 text-[10px]" style="pointer-events: none;">(${field.type})</span></span>`;
+    });
+  }, [content, fieldMap]);
 
-  const [editing, setEditing] = useState(false);
-
-  // If unlocked, show raw editable content
-  if (!locked) {
-    return editing ? (
-      <textarea autoFocus value={content} onChange={e => onChange(e.target.value)}
-        onBlur={() => setEditing(false)} rows={Math.max(3, (content.match(/\n/g) || []).length + 2)}
-        className="bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full resize-none text-sm leading-relaxed" />
-    ) : (
-      <div onClick={() => setEditing(true)}
-        className="cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 whitespace-pre-wrap min-h-[1.2em] text-sm leading-relaxed">
-        {segments.map((seg, i) => {
-          if (seg.type === "text") return <span key={i}>{seg.value}</span>;
-          const field = fieldMap.get(seg.fieldId);
-          if (!field) return <span key={i} className="text-red-400">{`{{${seg.fieldId}}}`}</span>;
-          return <BlankChip key={i} field={field} onClick={() => onClickBlank(field.id)} onDelete={() => onDeleteBlank(field.id)} />;
-        })}
-        {!content && <span className="text-gray-400 italic text-sm font-normal">Click to add content...</span>}
-      </div>
-    );
-  }
-
-  // Locked: render static text with blank chips
   return (
-    <div className="whitespace-pre-wrap min-h-[1.2em] text-sm leading-relaxed px-1">
-      {segments.map((seg, i) => {
-        if (seg.type === "text") return <span key={i}>{seg.value}</span>;
-        const field = fieldMap.get(seg.fieldId);
-        if (!field) return <span key={i} className="text-red-400">{`{{${seg.fieldId}}}`}</span>;
-        return <BlankChip key={i} field={field} onClick={() => onClickBlank(field.id)} onDelete={() => onDeleteBlank(field.id)} />;
-      })}
-      {!content && <span className="text-gray-400 italic text-sm font-normal">No content — insert blanks or unlock to edit.</span>}
+    <div className="relative group px-1" onClick={(e) => {
+      const chip = (e.target as HTMLElement).closest('.blank-chip');
+      if (chip) {
+        const id = chip.getAttribute('data-id');
+        if (id) onClickBlank(id);
+      }
+    }}>
+      <ContentEditableBlock
+        initialHtml={displayHtml}
+        onExit={() => {}}
+        className="editor-content w-full min-h-[1.2em] focus-visible:outline-none focus:outline-none"
+        onSave={(html) => {
+          // Revert html chips back to {{field_id}}
+          const temp = document.createElement("div");
+          temp.innerHTML = html;
+          temp.querySelectorAll('.blank-chip').forEach(el => {
+            const id = el.getAttribute('data-id');
+            if (id) {
+               el.replaceWith(`{{${id}}}`);
+            }
+          });
+          temp.querySelectorAll('.text-red-400').forEach(el => {
+            el.replaceWith(el.textContent || "");
+          });
+          onChange(temp.innerHTML);
+        }}
+      />
     </div>
   );
 }
@@ -601,12 +817,83 @@ function SowEditPageInner() {
   const [blankLabel, setBlankLabel] = useState("");
   const [blankType, setBlankType] = useState<FieldType>("text");
   const [blankPlaceholder, setBlankPlaceholder] = useState("");
+  const [blankOptions, setBlankOptions] = useState(""); // Comma-separated list for dropdown options
   const [blankRequired, setBlankRequired] = useState(false);
 
   // Blank editing state
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
 
+  // ── Ribbon state ──
+  const [activeTab, setActiveTab] = useState<RibbonTab>("home");
+  const [formatState, setFormatState] = useState({ 
+    bold: false, italic: false, underline: false, strikethrough: false,
+    fontName: "Arial", fontSize: "3",
+  });
+  const [textColor, setTextColor] = useState("#000000");
+  const [highlightColor, setHighlightColor] = useState("#ffff00");
+  const savedSelectionRef = useRef<Range | null>(null);
+
   const selectedSection = selectedSectionId ? findSection(data.sections, selectedSectionId) : null;
+
+  // Track formatting state at cursor via selectionchange
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      setFormatState({
+        bold: document.queryCommandState("bold"),
+        italic: document.queryCommandState("italic"),
+        underline: document.queryCommandState("underline"),
+        strikethrough: document.queryCommandState("strikeThrough"),
+        fontName: document.queryCommandValue("fontName")?.replace(/['"]/g, "") || "Arial",
+        fontSize: document.queryCommandValue("fontSize") || "3",
+      });
+
+      // Maintain a persistent reference to the last text selection inside the editor
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        let node = sel.anchorNode;
+        let isEditor = false;
+        while (node && node.nodeName !== 'BODY') {
+          if ((node as Element).hasAttribute && (node as Element).hasAttribute('contenteditable')) {
+             isEditor = true; 
+             break;
+          }
+          node = node.parentNode;
+        }
+        if (isEditor) {
+          savedSelectionRef.current = sel.getRangeAt(0).cloneRange();
+        }
+      }
+    };
+    document.addEventListener("selectionchange", handleSelectionChange);
+    return () => document.removeEventListener("selectionchange", handleSelectionChange);
+  }, []);
+
+  // Save current selection (for restoring after dropdown interactions)
+  const saveSelection = useCallback(() => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) savedSelectionRef.current = sel.getRangeAt(0).cloneRange();
+  }, []);
+  const restoreSelection = useCallback(() => {
+    const range = savedSelectionRef.current;
+    if (range) { const sel = window.getSelection(); if (sel) { sel.removeAllRanges(); sel.addRange(range); } }
+  }, []);
+
+  // Execute formatting command on the current selection
+  const handleFormat = useCallback((command: string, value?: string) => {
+    document.execCommand(command, false, value);
+    setFormatState({
+      bold: document.queryCommandState("bold"),
+      italic: document.queryCommandState("italic"),
+      underline: document.queryCommandState("underline"),
+      strikethrough: document.queryCommandState("strikeThrough"),
+      fontName: document.queryCommandValue("fontName")?.replace(/['"]/g, "") || "Arial",
+      fontSize: document.queryCommandValue("fontSize") || "3",
+    });
+  }, []);
+
+  // Global keyboard shortcut: Cmd/Ctrl+S to save document
+  // (handleSave is defined below, so we use a ref to avoid stale closure)
+  const handleSaveRef = useRef<() => void>(() => {});
 
   // DnD sensors - PointerSensor requires 5px movement before activating to avoid accidental drags
   const sensors = useSensors(
@@ -633,6 +920,20 @@ function SowEditPageInner() {
     a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.json`;
     a.click(); URL.revokeObjectURL(url);
   }
+  handleSaveRef.current = handleSave;
+
+  // Global Cmd/Ctrl+S shortcut to save document
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        handleSaveRef.current();
+      }
+    };
+    document.addEventListener("keydown", handleGlobalKeyDown);
+    return () => document.removeEventListener("keydown", handleGlobalKeyDown);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // handleLoadJSON opens a file picker, reads the JSON file, and replaces the current document
   function handleLoadJSON() {
@@ -667,17 +968,27 @@ function SowEditPageInner() {
     const newField: TemplateField = {
       id: fieldId, label: blankLabel.trim(), type: blankType,
       placeholder: blankPlaceholder || undefined, required: blankRequired,
+      options: blankType === "dropdown" ? blankOptions.split(",").map(s => s.trim()).filter(Boolean) : undefined,
     };
-    setData(p => {
-      const sec = findSection(p.sections, selectedSectionId);
-      const newContent = sec ? (sec.content ? sec.content + ` {{${fieldId}}}` : `{{${fieldId}}}`) : "";
-      return {
-        ...p,
-        fields: [...p.fields, newField],
-        sections: updateSection(p.sections, selectedSectionId, { content: newContent }),
-      };
-    });
-    setBlankLabel(""); setBlankPlaceholder(""); setBlankRequired(false);
+
+    if (savedSelectionRef.current) {
+       restoreSelection();
+       const fieldHtml = `<span contenteditable="false" class="blank-chip" data-id="${fieldId}" data-type="${blankType}"><span>${blankLabel.trim()}</span><span class="opacity-60 text-[10px]" style="pointer-events: none;">(${blankType})</span></span>&nbsp;`;
+       document.execCommand("insertHTML", false, fieldHtml);
+       setData(p => ({ ...p, fields: [...p.fields, newField] }));
+    } else {
+       setData(p => {
+         const sec = findSection(p.sections, selectedSectionId);
+         const newContent = sec ? (sec.content ? sec.content + ` {{${fieldId}}}` : `{{${fieldId}}}`) : "";
+         return {
+           ...p,
+           fields: [...p.fields, newField],
+           sections: updateSection(p.sections, selectedSectionId, { content: newContent }),
+         };
+       });
+    }
+
+    setBlankLabel(""); setBlankPlaceholder(""); setBlankRequired(false); setBlankOptions("");
     setShowBlankForm(false);
   }
 
@@ -831,82 +1142,165 @@ function SowEditPageInner() {
 
             {/* Right: ribbon + document pages */}
             <div className="flex-1 flex flex-col overflow-hidden">
-              {/* ── Frosted Editing Ribbon ── */}
-              {/* Sticky toolbar above the document. Groups: File, Insert, Lock, Delete. */}
-              {/* Buttons requiring a selection are disabled when selectedSection is null. */}
-              <div className="editor-ribbon sticky top-0 z-30 px-3 py-1.5 flex items-center gap-1 shrink-0">
-                {/* File group */}
-                <RibbonBtn icon={Save} label="Save" onClick={handleSave} />
-                <div className="ribbon-divider" />
+              {/* ── Microsoft Word-Style Ribbon ── */}
+              {/* ── Microsoft Word-Style Ribbon ── */}
+              <Tabs value={activeTab} onValueChange={v => setActiveTab(v as RibbonTab)} className="editor-ribbon sticky top-0 z-30 shrink-0 bg-background border-b focus-visible:outline-none focus:outline-none">
+                {/* Tab bar */}
+                <div className="flex items-center px-2 bg-muted/10">
+                  <TabsList className="bg-transparent border-none p-0 h-auto gap-0 rounded-none focus-visible:outline-none focus:outline-none">
+                    {(["home", "insert", "layout"] as RibbonTab[]).map(tab => (
+                      <TabsTrigger key={tab} value={tab}
+                        className="rounded-none border-t-0 border-x-0 border-b-2 border-b-transparent data-[state=active]:border-b-primary data-[state=active]:bg-background data-[state=active]:shadow-none outline-none ring-0 focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none px-4 py-1.5 text-[11px] uppercase tracking-wide font-medium">
+                        {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                      </TabsTrigger>
+                    ))}
+                  </TabsList>
+                  <div className="flex-1" />
+                  {selectedSection && (
+                    <div className="flex items-center gap-1 px-3 text-xs text-muted-foreground self-center">
+                      <span className="font-mono">{selectedSection.number}</span>
+                      <span className="truncate max-w-[200px]">{selectedSection.title}</span>
+                    </div>
+                  )}
+                </div>
 
-                {/* Insert group */}
-                <RibbonBtn icon={Plus} label="Section" onClick={() => setData(p => ({
-                  ...p, sections: renumberSections([...p.sections, { id: `sec-${Date.now()}`, number: "", title: "New Section", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] }])
-                }))} />
-                <RibbonBtn icon={Plus} label="Sub" disabled={!selectedSection}
-                  onClick={() => {
-                    if (!selectedSectionId) return;
-                    setData(p => ({ ...p, sections: renumberSections(addChildSection(p.sections, selectedSectionId)) }));
-                    setExpandedIds(p => new Set([...p, selectedSectionId]));
-                  }} />
-                <RibbonBtn icon={PlusCircle} label="Blank" disabled={!selectedSection}
-                  onClick={() => setShowBlankForm(true)} />
-                <div className="ribbon-divider" />
+                {/* Active tab content */}
+                <div className="ribbon-content flex flex-row items-stretch px-2 py-1 bg-background" style={{ minHeight: '68px' }}>
+                  <TabsContent value="home" className="flex flex-row items-stretch gap-1 m-0 focus-visible:outline-none">
+                      <RibbonGroup label="Clipboard">
+                        <RibbonBtn icon={Undo2} label="Undo" onClick={() => handleFormat("undo")} />
+                        <RibbonBtn icon={Redo2} label="Redo" onClick={() => handleFormat("redo")} />
+                      </RibbonGroup>
 
-                {/* Lock group */}
-                <RibbonBtn icon={selectedSection?.lockEdit ? Lock : Unlock}
-                  label={"Lock Text"}
-                  active={selectedSection?.lockEdit}
-                  disabled={!selectedSection}
-                  onClick={() => {
-                    if (!selectedSectionId) return;
-                    setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockEdit: !selectedSection?.lockEdit }) }));
-                  }} />
-                <RibbonBtn icon={selectedSection?.lockDelete ? Lock : Unlock}
-                  label={"Lock Deletion"}
-                  active={selectedSection?.lockDelete}
-                  disabled={!selectedSection}
-                  onClick={() => {
-                    if (!selectedSectionId) return;
-                    setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockDelete: !selectedSection?.lockDelete }) }));
-                  }} />
-                <RibbonBtn icon={selectedSection?.lockAddTable ? Lock : Unlock}
-                  label={"Lock Tables"}
-                  active={selectedSection?.lockAddTable}
-                  disabled={!selectedSection}
-                  onClick={() => {
-                    if (!selectedSectionId) return;
-                    setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockAddTable: !selectedSection?.lockAddTable }) }));
-                  }} />
-                <RibbonBtn icon={selectedSection?.lockAddSections ? Lock : Unlock}
-                  label={"Lock Text"}
-                  active={selectedSection?.lockAddSections}
-                  disabled={!selectedSection}
-                  onClick={() => {
-                    if (!selectedSectionId) return;
-                    setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockAddSections: !selectedSection?.lockAddSections }) }));
-                  }} />
-                <div className="ribbon-divider" />
+                      <RibbonGroup label="Font">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-1">
+                            <Select value={FONT_FAMILIES.includes(formatState.fontName) ? formatState.fontName : "Arial"} onValueChange={v => { restoreSelection(); handleFormat("fontName", v); }}>
+                              <SelectTrigger className="w-[120px] h-7! px-2 text-[11px] rounded-md focus:ring-0 focus-visible:ring-0 shadow-none border-input hover:bg-accent">
+                                <SelectValue placeholder="Font" />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {FONT_FAMILIES.map(f => (
+                                  <SelectItem key={f} value={f} style={{ fontFamily: f }}>{f}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
 
-                {/* Delete */}
-                <RibbonBtn icon={Trash2} label="Delete" danger disabled={!selectedSection || data.sections.length === 1}
-                  onClick={() => {
-                    if (!selectedSectionId || !confirm("Delete this section?")) return;
-                    setData(p => ({ ...p, sections: renumberSections(deleteSection(p.sections, selectedSectionId)) }));
-                    setSelectedSectionId(null);
-                  }} />
+                            <FontSizeInput formatState={formatState} restoreSelection={restoreSelection} handleFormat={handleFormat} />
+                          </div>
+                          <div className="flex items-center gap-0.5">
+                            <RibbonBtn icon={Bold} label="Bold" onClick={() => handleFormat("bold")} active={formatState.bold} />
+                            <RibbonBtn icon={Italic} label="Italic" onClick={() => handleFormat("italic")} active={formatState.italic} />
+                            <RibbonBtn icon={Underline} label="Underline" onClick={() => handleFormat("underline")} active={formatState.underline} />
+                            <RibbonBtn icon={Strikethrough} label="Strike" onClick={() => handleFormat("strikeThrough")} active={formatState.strikethrough} />
+                            <div className="ribbon-color-btn" title="Text color">
+                              <Type className="h-4 w-4" />
+                              <div className="ribbon-color-swatch" style={{ background: textColor }} />
+                              <input type="color" className="ribbon-color-input" value={textColor}
+                                onMouseDown={saveSelection}
+                                onChange={e => { setTextColor(e.target.value); restoreSelection(); handleFormat("foreColor", e.target.value); }} />
+                            </div>
+                            <div className="ribbon-color-btn" title="Highlight">
+                              <Highlighter className="h-4 w-4" />
+                              <div className="ribbon-color-swatch" style={{ background: highlightColor }} />
+                              <input type="color" className="ribbon-color-input" value={highlightColor}
+                                onMouseDown={saveSelection}
+                                onChange={e => { setHighlightColor(e.target.value); restoreSelection(); handleFormat("hiliteColor", e.target.value); }} />
+                            </div>
+                          </div>
+                        </div>
+                      </RibbonGroup>
 
-                {/* Spacer */}
-                <div className="flex-1" />
+                      <RibbonGroup label="Paragraph">
+                        <div className="flex flex-col gap-1">
+                          <div className="flex items-center gap-0.5">
+                            <RibbonBtn icon={AlignLeft} label="Left" onClick={() => handleFormat("justifyLeft")} />
+                            <RibbonBtn icon={AlignCenter} label="Center" onClick={() => handleFormat("justifyCenter")} />
+                            <RibbonBtn icon={AlignRight} label="Right" onClick={() => handleFormat("justifyRight")} />
+                            <RibbonBtn icon={AlignJustify} label="Justify" onClick={() => handleFormat("justifyFull")} />
+                          </div>
+                          <div className="flex items-center gap-0.5">
+                            <RibbonBtn icon={List} label="Bullets" onClick={() => handleFormat("insertUnorderedList")} />
+                            <RibbonBtn icon={ListOrdered} label="Numbers" onClick={() => handleFormat("insertOrderedList")} />
+                            <RibbonBtn icon={IndentDecrease} label="Outdent" onClick={() => handleFormat("outdent")} />
+                            <RibbonBtn icon={IndentIncrease} label="Indent" onClick={() => handleFormat("indent")} />
+                          </div>
+                        </div>
+                      </RibbonGroup>
 
-                {/* Selected section indicator */}
-                {selectedSection && (
-                  <div className="text-xs text-muted-foreground flex items-center gap-1">
-                    <span className="font-mono">{selectedSection.number}</span>
-                    <span className="truncate max-w-[200px]">{selectedSection.title}</span>
-                  </div>
-                )}
-              </div>
+                      <RibbonGroup label="Section">
+                        <RibbonBtn icon={selectedSection?.locked ? Lock : Unlock}
+                          label={selectedSection?.locked ? "Locked" : "Unlocked"}
+                          active={selectedSection?.locked}
+                          disabled={!selectedSection}
+                          onClick={() => {
+                            if (!selectedSectionId) return;
+                            setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { locked: !selectedSection?.locked }) }));
+                          }} />
+                      </RibbonGroup>
+
+                  </TabsContent>
+
+                  <TabsContent value="insert" className="flex flex-row items-stretch gap-1 m-0 focus-visible:outline-none">
+                      <RibbonGroup label="Sections">
+                        <RibbonBtn icon={Plus} label="Section" onClick={() => setData(p => ({
+                          ...p, sections: renumberSections([...p.sections, { id: `sec-${Date.now()}`, number: "", title: "New Section", content: "", locked: true, tables: [], children: [] }])
+                        }))} />
+                        <RibbonBtn icon={Plus} label="Sub" disabled={!selectedSection}
+                          onClick={() => {
+                            if (!selectedSectionId) return;
+                            setData(p => ({ ...p, sections: renumberSections(addChildSection(p.sections, selectedSectionId)) }));
+                            setExpandedIds(p => new Set([...p, selectedSectionId]));
+                          }} />
+                      </RibbonGroup>
+
+                      <RibbonGroup label="Content">
+                        <RibbonBtn icon={PlusCircle} label="Blank" disabled={!selectedSection}
+                          onClick={() => setShowBlankForm(true)} />
+                        <RibbonBtn icon={TableIcon} label="Table" disabled={!selectedSection}
+                          onClick={() => {
+                            if (!selectedSectionId) return;
+                            const sec = findSection(data.sections, selectedSectionId);
+                            if (sec) {
+                              const newTable: TableData = { id: `t-${Date.now()}`, rows: 3, cols: 3, data: Array(3).fill(null).map(() => Array(3).fill("")) };
+                              setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { tables: [...(sec.tables || []), newTable] }) }));
+                            }
+                          }} />
+                        <RibbonBtn icon={Minus} label="Rule" onClick={() => handleFormat("insertHorizontalRule")} />
+                      </RibbonGroup>
+
+                      <RibbonGroup label="File">
+                        <RibbonBtn icon={Save} label="Save" onClick={handleSave} />
+                        <RibbonBtn icon={Upload} label="Load" onClick={handleLoadJSON} />
+                        <RibbonBtn icon={Download} label="Export" onClick={handleExport} />
+                      </RibbonGroup>
+
+                  </TabsContent>
+
+                  <TabsContent value="layout" className="flex flex-row items-stretch gap-1 m-0 focus-visible:outline-none">
+                      <RibbonGroup label="Structure">
+                        <RibbonBtn icon={Trash2} label="Delete" danger disabled={!selectedSection || data.sections.length === 1}
+                          onClick={() => {
+                            if (!selectedSectionId || !confirm("Delete this section?")) return;
+                            setData(p => ({ ...p, sections: renumberSections(deleteSection(p.sections, selectedSectionId)) }));
+                            setSelectedSectionId(null);
+                          }} />
+                        <RibbonBtn icon={selectedSection?.locked ? Lock : Unlock}
+                          label={selectedSection?.locked ? "Locked" : "Unlocked"}
+                          active={selectedSection?.locked}
+                          disabled={!selectedSection}
+                          onClick={() => {
+                            if (!selectedSectionId) return;
+                            setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { locked: !selectedSection?.locked }) }));
+                          }} />
+                      </RibbonGroup>
+
+                      <RibbonGroup label="Formatting">
+                        <RibbonBtn icon={Eraser} label="Clear" onClick={() => handleFormat("removeFormat")} />
+                      </RibbonGroup>
+                  </TabsContent>
+                </div>
+              </Tabs>
 
               {/* ── Insert Blank Form (shown below ribbon) ── */}
               {showBlankForm && (
@@ -926,6 +1320,12 @@ function SowEditPageInner() {
                     <label className="text-[10px] font-medium text-muted-foreground uppercase">Placeholder</label>
                     <Input value={blankPlaceholder} onChange={e => setBlankPlaceholder(e.target.value)} placeholder="Hint text..." className="h-8 w-32 text-sm" />
                   </div>
+                  {blankType === "dropdown" && (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase">Options</label>
+                      <Input value={blankOptions} onChange={e => setBlankOptions(e.target.value)} placeholder="Comma separated..." className="h-8 w-40 text-sm" />
+                    </div>
+                  )}
                   <label className="flex items-center gap-1.5 text-xs cursor-pointer">
                     <input type="checkbox" checked={blankRequired} onChange={e => setBlankRequired(e.target.checked)} className="rounded" />
                     Required
@@ -967,6 +1367,12 @@ function SowEditPageInner() {
                     <label className="text-[10px] font-medium text-muted-foreground uppercase">Default</label>
                     <Input value={editingField.defaultValue || ""} onChange={e => handleUpdateField(editingField.id, { defaultValue: e.target.value })} className="h-8 w-32 text-sm" />
                   </div>
+                  {editingField.type === "dropdown" && (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase">Options</label>
+                      <Input value={editingField.options?.join(", ") || ""} onChange={e => handleUpdateField(editingField.id, { options: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })} placeholder="Comma separated..." className="h-8 w-40 text-sm" />
+                    </div>
+                  )}
                   <label className="flex items-center gap-1.5 text-xs cursor-pointer">
                     <input type="checkbox" checked={editingField.required ?? false} onChange={e => handleUpdateField(editingField.id, { required: e.target.checked })} className="rounded" />
                     Required
