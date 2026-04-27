@@ -18,7 +18,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
-
+import { Document, Packer, Paragraph, HeadingLevel } from "docx";
+import { saveAs } from "file-saver";
 import {
   Plus, Trash2, Download, Save, FileText, ChevronRight, ChevronDown,
   ListOrdered, Edit2, Table as TableIcon, Lock, Unlock, GripVertical,
@@ -655,8 +656,78 @@ function SowEditPageInner() {
 
   // handleExport is a placeholder — planned: Next.js API → sanitize → Flask → python-docx → .docx download
   function handleExport() {
-    alert("Export to Word will generate a .docx file. Backend integration coming soon!");
+  // Replace {{field_id}} with readable labels
+  function replaceBlanks(content: string, fields: any[]) {
+    return content.replace(/\{\{([^}]+)\}\}/g, (_, id) => {
+      const field = fields.find(f => f.id === id);
+      return field ? `[${field.label}]` : "";
+    });
   }
+
+  // Recursively convert your section tree → Word paragraphs
+  function processSections(sections: SectionNode[], depth = 0) {
+    const output: Paragraph[] = [];
+
+    sections.forEach((section) => {
+      // Section title (heading)
+      output.push(
+        new Paragraph({
+          text: `${section.number} ${section.title}`,
+          heading:
+            depth === 0
+              ? HeadingLevel.HEADING_1
+              : depth === 1
+              ? HeadingLevel.HEADING_2
+              : HeadingLevel.HEADING_3,
+        })
+      );
+
+      // Section content
+      output.push(
+        new Paragraph(
+          replaceBlanks(section.content || "", data.fields)
+        )
+      );
+
+      // Children
+      if (section.children && section.children.length > 0) {
+        output.push(...processSections(section.children, depth + 1));
+      }
+    });
+
+    return output;
+  }
+
+  // Build full document body
+  const children = [
+    // Optional: simple cover title
+    new Paragraph({
+      text: data.coverPage.title,
+      heading: HeadingLevel.TITLE,
+    }),
+
+    new Paragraph(""),
+
+    ...processSections(data.sections),
+  ];
+
+  // Create Word document
+  const doc = new Document({
+    sections: [
+      {
+        children,
+      },
+    ],
+  });
+
+  // Download file
+  Packer.toBlob(doc).then((blob) => {
+    saveAs(
+      blob,
+      `${data.documentName.replace(/\s+/g, "-").toLowerCase()}.docx`
+    );
+  });
+}
 
   // ── Insert Blank ──
   // Creates a new TemplateField, appends its {{fieldId}} token to the selected section's content,
@@ -836,7 +907,7 @@ function SowEditPageInner() {
               {/* Buttons requiring a selection are disabled when selectedSection is null. */}
               <div className="editor-ribbon sticky top-0 z-30 px-3 py-1.5 flex items-center gap-1 shrink-0">
                 {/* File group */}
-                <RibbonBtn icon={Save} label="Save" onClick={handleSave} />
+                <RibbonBtn icon={Save} label="RIGHT HERE" onClick={handleExport} />
                 <div className="ribbon-divider" />
 
                 {/* Insert group */}
