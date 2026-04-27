@@ -2,7 +2,6 @@
 
 import React, { Suspense, useMemo, useState, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Save, Download, FileText, ChevronRight, ChevronDown, Lock, ChevronLeft, CheckCircle2, Circle, FileDown, Plane } from "lucide-react";
 import type { TemplateData, SectionNode, TemplateField, HeaderFooterData } from "@/types/pageTypes";
@@ -879,76 +878,79 @@ function SowEngineerPageInner() {
   const filledBlanks = data.fields.filter(f => (fieldValues[f.id] ?? f.defaultValue ?? "").trim() !== "").length;
 
   return (
-    <SidebarProvider>
-      <SidebarInset className="flex flex-col h-screen overflow-hidden">
+    <div className="flex flex-col h-screen overflow-hidden">
 
-        {/* Header */}
-        <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4 bg-background sticky top-0 z-10">
-          <div className="flex items-center gap-2">
-            <a href="/">
-                <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <Plane className="size-4" />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold uppercase tracking-tighter">
-                    SoWizard
-                  </span>
-                  <span className="truncate text-xs text-muted-foreground uppercase font-mono">
-                    Tinker AFB
-                  </span>
-                </div>
-              </a>
-            <SidebarTrigger className="-ml-1" />
-            <FileText className="h-4 w-4 text-primary" />
+      {/* Header */}
+      <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b px-4 bg-background sticky top-0 z-10">
+        <div className="flex items-center gap-3">
+          {/* Logo */}
+          <a href="/" className="flex items-center gap-2">
+            <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg shrink-0">
+              <Plane className="size-4" />
+            </div>
+            <div className="flex flex-col text-left leading-tight">
+              <span className="text-sm font-semibold uppercase tracking-tighter">SoWizard</span>
+              <span className="text-[10px] text-muted-foreground uppercase font-mono">Tinker AFB</span>
+            </div>
+          </a>
+          {/* Separator */}
+          <div className="h-6 w-px bg-border shrink-0" />
+          {/* Document name */}
+          <div className="flex items-center gap-1.5">
+            <FileText className="h-4 w-4 text-primary shrink-0" />
             <span className="text-sm font-semibold">{data.documentName}</span>
           </div>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={handleLoad}>
-              <Download className="h-4 w-4 mr-1" /> Load Draft
-            </Button>
-            <Button variant="outline" size="sm" onClick={handleSave}>
-              <Save className="h-4 w-4 mr-1" /> Save Draft
-            </Button>
-            <Button size="sm" onClick={handleExport} disabled={exporting}>
-              <FileDown className="h-4 w-4 mr-1" />
-              {exporting ? "Exporting..." : "Export Word"}
-            </Button>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleLoad}>
+            <Download className="h-4 w-4 mr-1" /> Load Draft
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleSave}>
+            <Save className="h-4 w-4 mr-1" /> Save Draft
+          </Button>
+          <Button size="sm" onClick={handleExport} disabled={exporting}>
+            <FileDown className="h-4 w-4 mr-1" />
+            {exporting ? "Exporting..." : "Export Word"}
+          </Button>
+        </div>
+      </header>
+
+      {/* Body */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* Left: section navigator */}
+        <div className="w-60 border-r shrink-0 flex flex-col overflow-hidden">
+          <div className="px-3 py-2 border-b flex items-center gap-2 shrink-0 bg-background">
+            <span className="text-sm font-semibold">Sections</span>
           </div>
-        </header>
-
-        {/* Questionnaire bar - sits below the main header, above the document */}
-        {questions.length > 0 && (
-          <QuestionnaireBar
-            questions={questions}
-            activeIndex={activeQuestionIndex}
-            fieldValues={fieldValues}
-            onChangeField={handleChangeField}
-            onChangeIndex={handleChangeQuestionIndex}
-          />
-        )}
-
-        {/* Body */}
-        <div className="flex flex-1 overflow-hidden">
-
-          {/* Left: section navigator */}
-          <div className="w-60 border-r shrink-0 flex flex-col overflow-hidden">
-            <div className="px-3 py-2 border-b flex items-center gap-2 shrink-0 bg-background">
-              <span className="text-sm font-semibold">Sections</span>
-            </div>
-            <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
-              {data.sections.length === 0 ? (
-                <p className="text-xs text-muted-foreground px-2 py-2">No sections loaded.</p>
-              ) : (
-                renderNav(data.sections)
-              )}
-            </div>
+          <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
+            {data.sections.length === 0 ? (
+              <p className="text-xs text-muted-foreground px-2 py-2">No sections loaded.</p>
+            ) : (
+              renderNav(data.sections)
+            )}
           </div>
+        </div>
 
-          {/* Right: document pages */}
+        {/* Right: questionnaire bar + document pages */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+
+          {/* Questionnaire bar */}
+          {questions.length > 0 && (
+            <QuestionnaireBar
+              questions={questions}
+              activeIndex={activeQuestionIndex}
+              fieldValues={fieldValues}
+              onChangeField={handleChangeField}
+              onChangeIndex={handleChangeQuestionIndex}
+            />
+          )}
+
+          {/* Document pages */}
           <div className="flex-1 overflow-y-auto bg-gray-200 p-8">
             <div className="space-y-8">
 
-              {/* Cover page - read-only for engineers */}
+              {/* Cover page */}
               <div className="bg-white shadow-lg mx-auto relative text-black" style={{ width: "8.5in", height: "11in" }}>
                 <div className="absolute inset-8 border-4 border-black pointer-events-none" />
                 <div className="absolute inset-8 flex items-center justify-center">
@@ -1003,8 +1005,8 @@ function SowEngineerPageInner() {
             </div>
           </div>
         </div>
-      </SidebarInset>
-    </SidebarProvider>
+      </div>
+    </div>
   );
 }
 
