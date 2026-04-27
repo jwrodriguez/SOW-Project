@@ -11,9 +11,8 @@
  */
 "use client";
 
-import React, { Suspense, useMemo, useState} from "react";
+import React, { Suspense, useEffect, useMemo, useState} from "react";
 import { useSearchParams } from "next/navigation";
-import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +23,7 @@ import {
   Plus, Trash2, Download, Save, FileText, ChevronRight, ChevronDown,
   ListOrdered, Edit2, Table as TableIcon, Lock, Unlock, GripVertical,
   X, Check, PlusCircle, type LucideIcon,
+  Plane,
 } from "lucide-react";
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -37,6 +37,9 @@ import { CSS } from "@dnd-kit/utilities";
 // ============= TYPES =============
 // You can find Type Declarations and Descriptions used in .../types/pageTypes.ts
 import {FieldType, TemplateField, SectionNode, TableData, HeaderFooterData, TemplateData} from "@/types/pageTypes";
+import { saveGlobalTemplate } from "@/lib/db-upsert";
+import { get } from "http";
+import { getGlobalTemplate } from "@/lib/db-pullTemp";
 
 // Allowed field types listed here so both the insert form and edit form share the same options
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
@@ -387,7 +390,7 @@ export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fi
 
       {/* Section body — uses SectionContent for blank rendering */}
       <div className="ml-8" style={{ marginLeft: `${depth * 16 + 32}px` }}>
-        <SectionContent content={section.content} fields={fields} locked={section.locked}
+        <SectionContent content={section.content} fields={fields} locked={false /*section.locked*/}
           onClickBlank={onClickBlank} onDeleteBlank={onDeleteBlank}
           onChange={v => onUpdate({ content: v })} />
       </div>
@@ -587,59 +590,21 @@ function SowEditPageInner() {
       ],
     };
 
-
-    const setupParam = searchParams.get("setup");
-    if (setupParam) {
-      try {
-        const setup = JSON.parse(atob(setupParam));
-        if (setup.documentName) base.documentName = setup.documentName;
-        if (setup.title) base.coverPage.title = setup.title;
-        if (setup.projectNumber) { base.coverPage.projectNumber = setup.projectNumber; base.headerFooter.footerLeft = setup.projectNumber; }
-        if (setup.clientName) base.coverPage.clientName = setup.clientName;
-        if (setup.building) base.coverPage.building = setup.building;
-        if (setup.location) base.coverPage.location = setup.location;
-        if (setup.preparedBy) base.coverPage.preparedBy = setup.preparedBy;
-        if (setup.department) base.coverPage.department = setup.department;
-        if (setup.date) {
-          base.coverPage.date = setup.date;
-          const d = new Date(setup.date + "T00:00:00");
-          const formatted = d.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" });
-          base.headerFooter.headerLeft = `${setup.title || "Statement of Work"}\n${formatted}`;
-        }
-        if (setup.confidentiality) base.coverPage.confidentiality = setup.confidentiality;
-        if (setup.description) base.sections[0].content = setup.description;
-      } catch { /* use defaults */ }
-    }
-    const saved = localStorage.getItem("current_draft");
-    if (saved) {
-      try {
-        const setup = JSON.parse(saved);
-        
-        if (setup.documentName) base.documentName = setup.documentName;
-        if (setup.title) base.coverPage.title = setup.title;
-        if (setup.projectNumber) { base.coverPage.projectNumber = setup.projectNumber; base.headerFooter.footerLeft = setup.projectNumber; }
-        if (setup.clientName) base.coverPage.clientName = setup.clientName;
-        if (setup.building) base.coverPage.building = setup.building;
-        if (setup.location) base.coverPage.location = setup.location;
-        if (setup.preparedBy) base.coverPage.preparedBy = setup.preparedBy;
-        if (setup.department) base.coverPage.department = setup.department;
-        if (setup.date) {
-          base.coverPage.date = setup.date;
-          const d = new Date(setup.date + "T00:00:00");
-          const formatted = d.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" });
-          base.headerFooter.headerLeft = `${setup.title || "Statement of Work"}\n${formatted}`;
-        }
-        if (setup.confidentiality) base.coverPage.confidentiality = setup.confidentiality;
-        if (setup.description) base.sections[0].content = setup.description;
-
-        if (setup.sections) base.sections = setup.sections;
-
-      } catch { /* use defaults */ }
-
-    }
-
     return base;
   }, [searchParams]);
+
+  //update defaultData with db data if present
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const dbData = await getGlobalTemplate();
+        setData(dbData as TemplateData);
+      } catch (e) {
+        console.error("Failed to load template from IndexedDB:", e);
+      }
+    };
+    loadData();
+  }, []);
 
   const [data, setData] = useState<TemplateData>(defaultData); // Primary document state — all edits call setData with functional updates to avoid stale closures
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(defaultData.sections.map(s => s.id))); // Tracks which section IDs are expanded in the left navigator
@@ -675,39 +640,40 @@ function SowEditPageInner() {
   }
 
   // Save / Load / Export
-  // handleSave serializes state to JSON and triggers a browser file download — no server involved
+  // handleSave goes straight to DB
   function handleSave() {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.json`;
-    a.click(); URL.revokeObjectURL(url);
+    saveGlobalTemplate(data);
+    // const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    // const url = URL.createObjectURL(blob);
+    // const a = document.createElement("a");
+    // a.href = url;
+    // a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.json`;
+    // a.click(); URL.revokeObjectURL(url);
   }
 
   // handleLoadJSON opens a file picker, reads the JSON file, and replaces the current document
-  function handleLoadJSON() {
-    const input = document.createElement("input");
-    input.type = "file"; input.accept = ".json";
-    input.onchange = (e: Event) => {
-      const file = (e.target as HTMLInputElement).files?.[0]; if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ev => {
-        try {
-          const loaded = JSON.parse(ev.target?.result as string);
-          setData(loaded); setEditedName(loaded.documentName || "Untitled Document");
-          setExpandedIds(new Set(loaded.sections.map((s: SectionNode) => s.id)));
-        } catch { alert("Invalid JSON file"); }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
-  }
+  // function handleLoadJSON() {
+  //   const input = document.createElement("input");
+  //   input.type = "file"; input.accept = ".json";
+  //   input.onchange = (e: Event) => {
+  //     const file = (e.target as HTMLInputElement).files?.[0]; if (!file) return;
+  //     const reader = new FileReader();
+  //     reader.onload = ev => {
+  //       try {
+  //         const loaded = JSON.parse(ev.target?.result as string);
+  //         setData(loaded); setEditedName(loaded.documentName || "Untitled Document");
+  //         setExpandedIds(new Set(loaded.sections.map((s: SectionNode) => s.id)));
+  //       } catch { alert("Invalid JSON file"); }
+  //     };
+  //     reader.readAsText(file);
+  //   };
+  //   input.click();
+  // }
 
   // handleExport is a placeholder — planned: Next.js API → sanitize → Flask → python-docx → .docx download
-  function handleExport() {
-    alert("Export to Word will generate a .docx file. Backend integration coming soon!");
-  }
+  // function handleExport() {
+  //   alert("Export to Word will generate a .docx file. Backend integration coming soon!");
+  // }
 
   // ── Insert Blank ──
   // Creates a new TemplateField, appends its {{fieldId}} token to the selected section's content,
@@ -850,11 +816,23 @@ function SowEditPageInner() {
   // ============= RENDER =============
   return (
     <SidebarProvider>
-      <AppSidebar />
       <SidebarInset className="flex flex-col h-screen overflow-hidden">
         {/* Slim header — just sidebar trigger + doc name */}
         <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4 bg-background sticky top-0 z-10">
           <div className="flex items-center gap-2">
+            <a href="/">
+                <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                  <Plane className="size-4" />
+                </div>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold uppercase tracking-tighter">
+                    SoWizard
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground uppercase font-mono">
+                    Tinker AFB
+                  </span>
+                </div>
+              </a>
             <SidebarTrigger className="-ml-1" />
             <FileText className="h-4 w-4 text-primary" />
             {isEditingName ? (
@@ -895,8 +873,8 @@ function SowEditPageInner() {
               <div className="editor-ribbon sticky top-0 z-30 px-3 py-1.5 flex items-center gap-1 shrink-0">
                 {/* File group */}
                 <RibbonBtn icon={Save} label="Save" onClick={handleSave} />
-                <RibbonBtn icon={Download} label="Load" onClick={handleLoadJSON} />
-                <RibbonBtn icon={Download} label="Export" onClick={handleExport} />
+                {/* <RibbonBtn icon={Download} label="Load" onClick={handleLoadJSON} />
+                <RibbonBtn icon={Download} label="Export" onClick={handleExport} /> */}
                 <div className="ribbon-divider" />
 
                 {/* Insert group */}
@@ -1078,11 +1056,14 @@ function SowEditPageInner() {
 // Suspense wrapper for useSearchParams()
 export default function SowEditPage() {
   const { data: sessionData } = useSession();
+  const router = useRouter();
 
   //Prevent non-admins from using this page
-  if (sessionData?.user.role !== "ADMIN"){
-    useRouter().push("/");
-  }
+  useEffect(() => {
+    if (sessionData?.user.role !== "ADMIN"){
+      router.push("/");
+    }
+  }, [sessionData, router]);
 
 
   return (
