@@ -11,7 +11,7 @@
  */
 "use client";
 
-import React, { Suspense, useEffect, useMemo, useState} from "react";
+import React, { startTransition, Suspense, useEffect, useMemo, useState} from "react";
 import { useSearchParams } from "next/navigation";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -680,7 +680,12 @@ function SowEditPageInner() {
   // Save / Load / Export
   // handleSave goes straight to DB
   function handleSave() {
-    saveGlobalTemplate(data);
+    startTransition(async () => {
+      const result = await saveGlobalTemplate(data);
+      if (result.success) {
+        alert("The SOW template has been saved.");
+      }
+    });
     // const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     // const url = URL.createObjectURL(blob);
     // const a = document.createElement("a");
