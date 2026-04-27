@@ -4,11 +4,18 @@ import { db } from "@/db";
 import { TEMPLATE } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
+import {TemplateData} from "@/types/pageTypes";
 
 // A fixed UUID to ensure we only ever edit the same single row
 const SINGLETON_ID = "00000000-0000-0000-0000-000000000001";
 
-export async function saveGlobalTemplate(data: any) {
+interface saveNotification {
+    success: boolean,
+    error?: string
+}
+
+
+export async function saveGlobalTemplate(data: TemplateData): Promise<saveNotification> {
   try {
     await db
       .insert(TEMPLATE)

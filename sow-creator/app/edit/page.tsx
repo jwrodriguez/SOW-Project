@@ -11,19 +11,23 @@
  */
 "use client";
 
-import React, { startTransition, Suspense, useEffect, useMemo, useState} from "react";
-import { useSearchParams } from "next/navigation";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import React, {Suspense, useMemo, useState, useCallback, useRef, useEffect, useEffectEvent} from "react";
+import { useSearchParams, useRouter } from "next/navigation";
+import { useSession } from "@/lib/auth-client";
+import { ProfileMenu } from "@/components/profile-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { useSession } from "@/lib/auth-client";
-import { useRouter } from "next/navigation";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Toggle } from "@/components/ui/toggle";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import {
   Plus, Trash2, Download, Save, FileText, ChevronRight, ChevronDown,
   ListOrdered, Edit2, Table as TableIcon, Lock, Unlock, GripVertical,
   X, Check, PlusCircle, type LucideIcon,
-  Plane,
+  Bold, Italic, Underline, Strikethrough, AlignLeft, AlignCenter,
+  AlignRight, AlignJustify, List, IndentIncrease, IndentDecrease,
+  Undo2, Redo2, Type, Highlighter, Minus, Upload, Eraser,
 } from "lucide-react";
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -35,18 +39,53 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 
 // ============= TYPES =============
-// You can find Type Declarations and Descriptions used in .../types/pageTypes.ts
-import {FieldType, TemplateField, SectionNode, TableData, HeaderFooterData, TemplateData} from "@/types/pageTypes";
-import { saveGlobalTemplate } from "@/lib/db-upsert";
-import { get } from "http";
-import { getGlobalTemplate } from "@/lib/db-pullTemp";
+// TypeScript type definitions for every data shape in this file.
+// FieldType is the set of allowed blank field types.
+// TemplateField describes one fillable blank slot inserted into section content.
+// SectionNode is recursive — children: SectionNode[] enables nested subsections.
+// locked: boolean on SectionNode controls whether the section is editable.
+// TemplateData is the top-level document object that gets serialized to JSON on Save.
+// Format: Format descriptors for the type of string/text
+type FieldType = "text" | "number" | "word" | "sentence" | "paragraph" | "list" | "date" | "dropdown";
+type TemplateField = {
+  id: string; label: string; type: FieldType;
+  defaultValue?: string; placeholder?: string; required?: boolean; options?: string[];
+};
+type SectionNode = {
+  id: string; number: string; title: string; content: string;
+  lockEdit: boolean; lockDelete: boolean; lockAddTable: boolean; lockAddSections: boolean;
+  tables?: TableData[]; children: SectionNode[];
+};
+type TableData = { id: string; rows: number; cols: number; data: string[][] };
+type CoverPageData = {
+  title: string; projectNumber: string; clientName: string; building: string;
+  location: string; preparedBy: string; department: string; date: string;
+  version: string; confidentiality: string;
+};
+type HeaderFooterData = {
+  headerLeft: string; headerCenter: string; headerRight: string;
+  footerLeft: string; footerCenter: string; footerRight: string;
+  showPageNumbers: boolean; pageNumberPosition: "footer-center" | "footer-right" | "footer-left";
+};
+type TemplateData = {
+  documentName: string; fields: TemplateField[];
+  coverPage: CoverPageData; headerFooter: HeaderFooterData; sections: SectionNode[];
+};
+type Format = {
+    bold: boolean,
+    italic: boolean,
+    underline: boolean,
+    strikethrough: boolean,
+    fontName: string,
+    fontSize: string;
+}
 
 // Allowed field types listed here so both the insert form and edit form share the same options
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "text", label: "Text" }, { value: "number", label: "Number" },
   { value: "word", label: "Word" }, { value: "sentence", label: "Sentence" },
   { value: "paragraph", label: "Paragraph" }, { value: "list", label: "List" },
-  { value: "date", label: "Date" },
+  { value: "date", label: "Date" }, { value: "dropdown", label: "Dropdown" },
 ];
 
 // ============= RIBBON BUTTON =============
@@ -55,17 +94,209 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
 function RibbonBtn({ icon: Icon, label, onClick, disabled, active, danger }: {
   icon: LucideIcon; label: string; onClick?: () => void; disabled?: boolean; active?: boolean; danger?: boolean;
 }) {
+  const content = (
+      <>
+        <Icon className="h-4 w-4" />
+        <span className="text-[10px] leading-none">{label}</span>
+      </>
+  );
+
+  // If component is a true/false toggle (e.g. Bold)
+  if (active !== undefined) {
+    return (
+        <Toggle pressed={active} onPressedChange={onClick} disabled={disabled} title={label}
+                onMouseDown={e => e.preventDefault()}
+                className={`flex flex-col items-center gap-0.5 h-auto py-1 px-2 rounded-sm ${danger ? "text-destructive hover:text-destructive hover:bg-destructive/10" : ""} data-[state=on]:bg-primary/20 data-[state=on]:text-primary`}
+                size="sm">
+          {content}
+        </Toggle>
+    );
+  }
+
+  // Otherwise, normal push-button
   return (
-    <button onClick={onClick} disabled={disabled} title={label}
-      className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded text-[10px] transition-colors
-        ${disabled ? "opacity-30 cursor-not-allowed" : "hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer"}
-        ${active ? "bg-primary/10 text-primary" : ""}
-        ${danger ? "text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" : ""}`}>
-      <Icon className="h-4 w-4" />
-      <span className="leading-none">{label}</span>
-    </button>
+      <Button variant="ghost" size="sm" onClick={onClick} disabled={disabled} title={label}
+              onMouseDown={e => e.preventDefault()}
+              className={`flex flex-col items-center gap-0.5 h-auto py-1 px-2 rounded-sm ${danger ? "text-destructive hover:text-destructive hover:bg-destructive/10" : ""}`}>
+        {content}
+      </Button>
   );
 }
+
+// ============= RIBBON GROUP =============
+// Groups controls under a labeled section like Word's ribbon groups.
+function RibbonGroup({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+      <div className="ribbon-group flex flex-col items-center px-1.5 py-0.5 gap-0.5">
+        <div className="ribbon-group-controls flex flex-row items-center gap-px flex-1">{children}</div>
+        <span className="ribbon-group-label text-[9px] uppercase tracking-wider text-muted-foreground text-center select-none whitespace-nowrap">{label}</span>
+      </div>
+  );
+}
+
+// Font families and sizes for the ribbon dropdowns
+const FONT_FAMILIES = [
+  "Arial", "Times New Roman", "Calibri", "Georgia", "Courier New",
+  "Verdana", "Trebuchet MS", "Garamond", "Tahoma",
+];
+const FONT_SIZE_MAP: { label: string; value: string }[] = [
+  { label: "8", value: "1" }, { label: "10", value: "2" },
+  { label: "12", value: "3" }, { label: "14", value: "4" },
+  { label: "18", value: "5" }, { label: "24", value: "6" },
+  { label: "36", value: "7" },
+];
+type RibbonTab = "home" | "insert" | "layout";
+
+// ============= FONT SIZE INPUT =============
+function FontSizeInput({ formatState, restoreSelection, handleFormat }: {
+  formatState: Format, restoreSelection: () => void, handleFormat: (c: string, v: string) => void
+}) {
+  const defaultLabel = FONT_SIZE_MAP.find(s => s.value === formatState.fontSize)?.label || "12";
+  const [localValue, setLocalValue] = useState(defaultLabel);
+
+  useEffect(() => {
+    setLocalValue(FONT_SIZE_MAP.find(s => s.value === formatState.fontSize)?.label || "12");
+  }, [formatState.fontSize]);
+
+  const commitValue = (val: string) => {
+    let sizeObj = FONT_SIZE_MAP.find(s => s.label === val);
+    if (!sizeObj) {
+      const numericVal = parseInt(val, 10);
+      if (!isNaN(numericVal)) {
+        let closest = FONT_SIZE_MAP[0];
+        let minDiff = Infinity;
+        for (const s of FONT_SIZE_MAP) {
+          const diff = Math.abs(parseInt(s.label) - numericVal);
+          if (diff < minDiff) { minDiff = diff; closest = s; }
+        }
+        sizeObj = closest;
+      }
+    }
+
+    if (sizeObj) {
+      restoreSelection();
+      handleFormat("fontSize", sizeObj.value);
+    }
+
+    setTimeout(() => { setLocalValue(sizeObj?.label || "12"); }, 50);
+  };
+
+  return (
+      <div className="relative">
+        <input
+            list="font-sizes-list"
+            value={localValue}
+            onChange={e => {
+              setLocalValue(e.target.value);
+              if (FONT_SIZE_MAP.some(s => s.label === e.target.value)) {
+                commitValue(e.target.value);
+              }
+            }}
+            onBlur={e => commitValue(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                commitValue(localValue);
+                e.currentTarget.blur();
+              }
+            }}
+            className="h-7! w-[60px] text-[11px] rounded-md border border-input bg-transparent px-2 shadow-none outline-none focus:ring-0 hover:bg-accent"
+        />
+        <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 h-4 w-4 opacity-50 pointer-events-none" />
+        <datalist id="font-sizes-list">
+          {FONT_SIZE_MAP.map(s => <option key={s.label} value={s.label} />)}
+        </datalist>
+      </div>
+  );
+}
+
+// ============= CONTENT EDITABLE BLOCK =============
+// Isolated contentEditable that React.memo never re-renders. This prevents React
+// from interfering with user-edited DOM content when parent state changes (e.g. formatState).
+//
+// Key design: onBlur does NOT exit editing mode. Instead, a click-outside listener
+// detects clicks outside both the editable AND the ribbon, and only then exits.
+// This ensures formatting buttons work without unmounting the contentEditable.
+const ContentEditableBlock = React.memo(function ContentEditableBlock({
+                                                                        initialHtml, onSave, onExit, className,
+                                                                      }: {
+  initialHtml: string;
+  onSave: (html: string) => void;
+  onExit: () => void;
+  className: string;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const onSaveRef = useRef(onSave);
+  const onExitRef = useRef(onExit);
+  onSaveRef.current = onSave;
+  onExitRef.current = onExit;
+
+  // Set initial content on mount
+  useEffect(() => {
+    if (ref.current) {
+      ref.current.innerHTML = initialHtml;
+      ref.current.focus();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Click-outside detection: exit editing only when clicking outside
+  // BOTH the contentEditable AND the ribbon toolbar
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Ignore clicks inside this editable
+      if (ref.current && ref.current.contains(target)) return;
+      // Ignore clicks inside the ribbon (so formatting buttons don't exit editing)
+      if (target.closest(".editor-ribbon")) return;
+      // Click was outside both — save and exit
+      if (ref.current) onSaveRef.current(ref.current.innerHTML);
+      onExitRef.current();
+    };
+    // Use setTimeout so the initial click that opened editing doesn't immediately close it
+    const timer = setTimeout(() => {
+      document.addEventListener("mousedown", handleClickOutside);
+    }, 0);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener("mousedown", handleClickOutside);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  return (
+      <div
+          ref={ref}
+          contentEditable
+          suppressContentEditableWarning
+          onPointerDown={e => e.stopPropagation()} // Stop dnd-kit from intercepting drag
+          onMouseDown={e => e.stopPropagation()}   // Stop parent from stealing focus/state
+          onClick={e => e.stopPropagation()}       // Stop parent onClick (which triggers onSelect)
+          onKeyDown={(e) => {
+            // Keyboard shortcuts for formatting (Cmd/Ctrl + key)
+            const mod = e.metaKey || e.ctrlKey;
+            if (mod) {
+              switch (e.key.toLowerCase()) {
+                case "b": e.preventDefault(); document.execCommand("bold"); break;
+                case "i": e.preventDefault(); document.execCommand("italic"); break;
+                case "u": e.preventDefault(); document.execCommand("underline"); break;
+                case "z":
+                  e.preventDefault();
+                  document.execCommand(e.shiftKey ? "redo" : "undo");
+                  break;
+              }
+            }
+            // ESC exits editing
+            if (e.key === "Escape") {
+              e.preventDefault();
+              if (ref.current) onSaveRef.current(ref.current.innerHTML);
+              onExitRef.current();
+            }
+          }}
+          className={className}
+      />
+  );
+}, () => true); // Custom comparator: never re-render
 
 // ============= INLINE EDITING =============
 /**
@@ -75,7 +306,7 @@ function RibbonBtn({ icon: Icon, label, onClick, disabled, active, danger }: {
  * @param className Optional additional class names for styling
  * @param placeholder Placeholder text when value is empty
  * @param disabled Boolean value indicating whether the text is open for editing or locked
- * 
+ *
  * @returns A JSX element that displays text and allows inline editing on click, with support for different input types and customizable styling. When the value is empty, it shows a placeholder to prompt the user to add content.
  */
 export function EditableText({ value, onChange, className = "", placeholder = "Click to edit", disabled }: {
@@ -87,29 +318,29 @@ export function EditableText({ value, onChange, className = "", placeholder = "C
 }) {
   const [editing, setEditing] = useState(false);
   if (disabled) return (
-    <div className={`px-1 min-h-[1.2em] ${className}`}>
-      {value || <span className="text-gray-400 italic text-sm font-normal">{placeholder}</span>}
-    </div>
+      <div className={`px-1 min-h-[1.2em] ${className}`}>
+        {value || <span className="text-gray-400 italic text-sm font-normal">{placeholder}</span>}
+      </div>
   );
   return editing ? (
-    <input autoFocus type="text" value={value} onChange={e => onChange(e.target.value)}
-      onBlur={() => setEditing(false)} onKeyDown={e => e.key === "Enter" && setEditing(false)}
-      className={`bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full ${className}`} />
+      <input autoFocus type="text" value={value} onChange={e => onChange(e.target.value)}
+             onBlur={() => setEditing(false)} onKeyDown={e => e.key === "Enter" && setEditing(false)}
+             className={`bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full ${className}`} />
   ) : (
-    <div onClick={() => setEditing(true)}
-      className={`cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 min-h-[1.2em] ${className}`}>
-      {value || <span className="text-gray-400 italic text-sm font-normal">{placeholder}</span>}
-    </div>
+      <div onClick={() => setEditing(true)}
+           className={`cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 min-h-[1.2em] ${className}`}>
+        {value || <span className="text-gray-400 italic text-sm font-normal">{placeholder}</span>}
+      </div>
   );
 }
 
 /**
  * Multi-line click-to-edit field. Same disabled/enabled pattern as EditableText but uses a <textarea>. Row height auto-adjusts based on newline count in the content.
  * @param value The text content to display/edit
- * @param onChange Callback when text changes, recieves updated string value 
+ * @param onChange Callback when text changes, recieves updated string value
  * @param className Optional additional class names for styling
  * @param placeholder Placeholder text when value is empty
- * @param disabled Boolean value determining whether the section is locked or open for editing 
+ * @param disabled Boolean value determining whether the section is locked or open for editing
  *
  * @returns A JSX element that displays text and allows inline editing on click
  */
@@ -121,21 +352,21 @@ export function EditableArea({ value, onChange, className = "", placeholder = "C
   placeholder?: string;
   disabled?: boolean;
 }) {
-  const [editing, setEditing] = useState(false);
-  if (disabled) return (
-    <div className={`px-1 whitespace-pre-wrap min-h-[1.2em] ${className}`}>
-      {value || <span className="text-gray-400 italic text-sm font-normal">{placeholder}</span>}
-    </div>
-  );
-  return editing ? (
-    <textarea autoFocus value={value} onChange={e => onChange(e.target.value)}
-      onBlur={() => setEditing(false)} rows={Math.max(3, (value.match(/\n/g) || []).length + 2)}
-      className={`bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full resize-none ${className}`} />
-  ) : (
-    <div onClick={() => setEditing(true)}
-      className={`cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 whitespace-pre-wrap min-h-[1.2em] ${className}`}>
-      {value || <span className="text-gray-400 italic text-sm font-normal">{placeholder}</span>}
-    </div>
+  if (disabled) {
+    return (
+        <div className={`px-1 whitespace-pre-wrap min-h-[1.2em] ${className}`}
+             dangerouslySetInnerHTML={{ __html: value || `<span class="text-gray-400 italic text-sm font-normal">${placeholder}</span>` }} />
+    );
+  }
+
+  // Always render ContentEditableBlock when enabled to prevent DOM swaps that break selection
+  return (
+      <ContentEditableBlock
+          initialHtml={value}
+          onSave={(html) => onChange(html)}
+          onExit={() => {}}
+          className={`content-editable-area bg-blue-50 border border-blue-300 rounded px-1 w-full ${className}`}
+      />
   );
 }
 /**
@@ -145,7 +376,7 @@ export function EditableArea({ value, onChange, className = "", placeholder = "C
  * @param pageNumber page number input to replace {PAGE} token with in display mode
  * @param className Optional additional class names for styling
  * @param placeholder Placeholder text when value is empty
- * 
+ *
  * @returns A JSX element for editing footer text with support for dynamic page numbers via the {PAGE} token. Displays the resolved page number in display mode and shows the {PAGE} token in edit mode to clarify usage.
  */
 export function EditableFooterZone({ value, onChange, pageNumber, className = "", placeholder = "Click to add footer content..." }: {
@@ -157,15 +388,15 @@ export function EditableFooterZone({ value, onChange, pageNumber, className = ""
 }) {
   const [editing, setEditing] = useState(false);
   return editing ? (
-    <textarea autoFocus value={value} onChange={e => onChange(e.target.value)}
-      onBlur={() => setEditing(false)} rows={Math.max(1, (value.match(/\n/g) || []).length + 1)}
-      className={`bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full resize-none text-sm ${className}`} />
+      <textarea autoFocus value={value} onChange={e => onChange(e.target.value)}
+                onBlur={() => setEditing(false)} rows={Math.max(1, (value.match(/\n/g) || []).length + 1)}
+                className={`bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full resize-none text-sm ${className}`} />
   ) : (
-    <div onClick={() => setEditing(true)}
-      className={`cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 whitespace-pre-wrap min-h-[1.2em] text-sm ${className}`}>
-      {value ? value.replace("{PAGE}", String(pageNumber))
-        : <span className="text-gray-400 italic text-sm">{placeholder}</span>}
-    </div>
+      <div onClick={() => setEditing(true)}
+           className={`cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 whitespace-pre-wrap min-h-[1.2em] text-sm ${className}`}>
+        {value ? value.replace("{PAGE}", String(pageNumber))
+            : <span className="text-gray-400 italic text-sm">{placeholder}</span>}
+      </div>
   );
 }
 
@@ -177,11 +408,11 @@ function BlankChip({ field, onClick, onDelete }: {
   field: TemplateField; onClick: () => void; onDelete: () => void;
 }) {
   return (
-    <span className="blank-chip" data-type={field.type} onClick={onClick}>
+      <span className="blank-chip" data-type={field.type} onClick={onClick}>
       <span>{field.label}</span>
       <span className="opacity-60 text-[10px]">({field.type})</span>
       <button onClick={e => { e.stopPropagation(); onDelete(); }}
-        className="ml-0.5 opacity-40 hover:opacity-100 transition-opacity" title="Remove blank">
+              className="ml-0.5 opacity-40 hover:opacity-100 transition-opacity" title="Remove blank">
         <X className="h-3 w-3" />
       </button>
     </span>
@@ -199,55 +430,44 @@ function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, 
 }) {
   const fieldMap = useMemo(() => new Map(fields.map(f => [f.id, f])), [fields]);
 
-  // Parse content into segments: text and {{field_id}} tokens
-  const segments = useMemo(() => {
-    const parts: Array<{ type: "text"; value: string } | { type: "blank"; fieldId: string }> = [];
-    const regex = /\{\{([^}]+)\}\}/g;
-    let last = 0;
-    let match;
-    while ((match = regex.exec(content)) !== null) {
-      if (match.index > last) parts.push({ type: "text", value: content.slice(last, match.index) });
-      parts.push({ type: "blank", fieldId: match[1] });
-      last = match.index + match[0].length;
-    }
-    if (last < content.length) parts.push({ type: "text", value: content.slice(last) });
-    if (parts.length === 0) parts.push({ type: "text", value: "" });
-    return parts;
-  }, [content]);
+  // Convert {{field_id}} to non-editable span chips with data attributes
+  const displayHtml = useMemo(() => {
+    return content.replace(/\{\{([^}]+)\}\}/g, (match, fieldId) => {
+      const field = fieldMap.get(fieldId);
+      if (!field) return `<span class="text-red-400">{{${fieldId}}}</span>`;
+      return `<span contenteditable="false" class="blank-chip" data-id="${field.id}" data-type="${field.type}"><span>${field.label}</span><span class="opacity-60 text-[10px]" style="pointer-events: none;">(${field.type})</span></span>`;
+    });
+  }, [content, fieldMap]);
 
-  const [editing, setEditing] = useState(false);
-
-  // If unlocked, show raw editable content
-  if (!locked) {
-    return editing ? (
-      <textarea autoFocus value={content} onChange={e => onChange(e.target.value)}
-        onBlur={() => setEditing(false)} rows={Math.max(3, (content.match(/\n/g) || []).length + 2)}
-        className="bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full resize-none text-sm leading-relaxed" />
-    ) : (
-      <div onClick={() => setEditing(true)}
-        className="cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 whitespace-pre-wrap min-h-[1.2em] text-sm leading-relaxed">
-        {segments.map((seg, i) => {
-          if (seg.type === "text") return <span key={i}>{seg.value}</span>;
-          const field = fieldMap.get(seg.fieldId);
-          if (!field) return <span key={i} className="text-red-400">{`{{${seg.fieldId}}}`}</span>;
-          return <BlankChip key={i} field={field} onClick={() => onClickBlank(field.id)} onDelete={() => onDeleteBlank(field.id)} />;
-        })}
-        {!content && <span className="text-gray-400 italic text-sm font-normal">Click to add content...</span>}
-      </div>
-    );
-  }
-
-  // Locked: render static text with blank chips
   return (
-    <div className="whitespace-pre-wrap min-h-[1.2em] text-sm leading-relaxed px-1">
-      {segments.map((seg, i) => {
-        if (seg.type === "text") return <span key={i}>{seg.value}</span>;
-        const field = fieldMap.get(seg.fieldId);
-        if (!field) return <span key={i} className="text-red-400">{`{{${seg.fieldId}}}`}</span>;
-        return <BlankChip key={i} field={field} onClick={() => onClickBlank(field.id)} onDelete={() => onDeleteBlank(field.id)} />;
-      })}
-      {!content && <span className="text-gray-400 italic text-sm font-normal">No content — insert blanks or unlock to edit.</span>}
-    </div>
+      <div className="relative group px-1" onClick={(e) => {
+        const chip = (e.target as HTMLElement).closest('.blank-chip');
+        if (chip) {
+          const id = chip.getAttribute('data-id');
+          if (id) onClickBlank(id);
+        }
+      }}>
+        <ContentEditableBlock
+            initialHtml={displayHtml}
+            onExit={() => {}}
+            className="editor-content w-full min-h-[1.2em] focus-visible:outline-none focus:outline-none"
+            onSave={(html) => {
+              // Revert html chips back to {{field_id}}
+              const temp = document.createElement("div");
+              temp.innerHTML = html;
+              temp.querySelectorAll('.blank-chip').forEach(el => {
+                const id = el.getAttribute('data-id');
+                if (id) {
+                  el.replaceWith(`{{${id}}}`);
+                }
+              });
+              temp.querySelectorAll('.text-red-400').forEach(el => {
+                el.replaceWith(el.textContent || "");
+              });
+              onChange(temp.innerHTML);
+            }}
+        />
+      </div>
   );
 }
 
@@ -258,36 +478,36 @@ function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, 
  * @param onHF setter function that updates a designated section of content in the HeaderFooterData object
  * @param pageNumber The designated number of the page to be generated in the open document
  * @param children Document body content to be imported into the page wrapper
- * 
+ *
  * @returns A JSX Element component serving as a template/design for a specific page of the document with editable header footer areas
  */
 export function DocumentPage({ hf, onHF, pageNumber, children }: {
   hf: HeaderFooterData; onHF: (k: keyof HeaderFooterData, v: string) => void; pageNumber: number; children: React.ReactNode;
 }) {
   return (
-    <div className="bg-white shadow-lg mx-auto text-black" style={{ width: "8.5in", minHeight: "11in", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "0.5in 1in 0.1in 1in" }}>
-        <div className="grid grid-cols-3 gap-1 text-sm text-gray-700">
-          <EditableArea value={hf.headerLeft} onChange={v => onHF("headerLeft", v)} placeholder="Header left" />
-          <EditableArea value={hf.headerCenter} onChange={v => onHF("headerCenter", v)} className="text-center" placeholder="Header center" />
-          <EditableArea value={hf.headerRight} onChange={v => onHF("headerRight", v)} className="text-right" placeholder="Header right" />
+      <div className="bg-white shadow-lg mx-auto text-black" style={{ width: "8.5in", minHeight: "11in", display: "flex", flexDirection: "column" }}>
+        <div style={{ padding: "0.5in 1in 0.1in 1in" }}>
+          <div className="grid grid-cols-3 gap-1 text-sm text-gray-700">
+            <EditableArea value={hf.headerLeft} onChange={v => onHF("headerLeft", v)} placeholder="Header left" />
+            <EditableArea value={hf.headerCenter} onChange={v => onHF("headerCenter", v)} className="text-center" placeholder="Header center" />
+            <EditableArea value={hf.headerRight} onChange={v => onHF("headerRight", v)} className="text-right" placeholder="Header right" />
+          </div>
+        </div>
+        <div style={{ padding: "0.1in 1in", flex: 1 }}>{children}</div>
+        <div style={{ padding: "0.1in 1in 0.5in 1in" }}>
+          <div className="grid grid-cols-3 gap-1 text-gray-700">
+            {(hf.showPageNumbers && hf.pageNumberPosition === "footer-left") ? (
+                <EditableFooterZone value={hf.footerLeft} onChange={v => onHF("footerLeft", v)} pageNumber={pageNumber} className="text-left" placeholder="Page {PAGE}" />
+            ): <EditableFooterZone value={hf.footerLeft} onChange={v => onHF("footerLeft", v)} pageNumber={pageNumber} className="text-left" placeholder="Footer left" />}
+            {(hf.showPageNumbers && hf.pageNumberPosition === "footer-center") ? (
+                <EditableFooterZone value={hf.footerCenter} onChange={v => onHF("footerCenter", v)} pageNumber={pageNumber} className="text-center" placeholder="Page {PAGE}" />
+            ): <EditableFooterZone value={hf.footerCenter} onChange={v => onHF("footerCenter", v)} pageNumber={pageNumber} className="text-center" placeholder="Footer center" />}
+            {(hf.showPageNumbers && hf.pageNumberPosition === "footer-right") ? (
+                <EditableFooterZone value={hf.footerRight} onChange={v => onHF("footerRight", v)} pageNumber={pageNumber} className="text-right" placeholder="Page {PAGE}" />
+            ): <EditableFooterZone value={hf.footerRight} onChange={v => onHF("footerRight", v)} pageNumber={pageNumber} className="text-right" placeholder="Footer right" />}
+          </div>
         </div>
       </div>
-      <div style={{ padding: "0.1in 1in", flex: 1 }}>{children}</div>
-      <div style={{ padding: "0.1in 1in 0.5in 1in" }}>
-        <div className="grid grid-cols-3 gap-1 text-gray-700">
-          {(hf.showPageNumbers && hf.pageNumberPosition === "footer-left") ? (
-              <EditableFooterZone value={hf.footerLeft} onChange={v => onHF("footerLeft", v)} pageNumber={pageNumber} className="text-left" placeholder="Page {PAGE}" />
-          ): <EditableFooterZone value={hf.footerLeft} onChange={v => onHF("footerLeft", v)} pageNumber={pageNumber} className="text-left" placeholder="Footer left" />}
-          {(hf.showPageNumbers && hf.pageNumberPosition === "footer-center") ? (
-              <EditableFooterZone value={hf.footerCenter} onChange={v => onHF("footerCenter", v)} pageNumber={pageNumber} className="text-center" placeholder="Page {PAGE}" />
-          ): <EditableFooterZone value={hf.footerCenter} onChange={v => onHF("footerCenter", v)} pageNumber={pageNumber} className="text-center" placeholder="Footer center" />}
-          {(hf.showPageNumbers && hf.pageNumberPosition === "footer-right") ? (
-              <EditableFooterZone value={hf.footerRight} onChange={v => onHF("footerRight", v)} pageNumber={pageNumber} className="text-right" placeholder="Page {PAGE}" />
-          ): <EditableFooterZone value={hf.footerRight} onChange={v => onHF("footerRight", v)} pageNumber={pageNumber} className="text-right" placeholder="Footer right" />}
-        </div>
-      </div>
-    </div>
   );
 }
 
@@ -307,12 +527,12 @@ export function DocumentPage({ hf, onHF, pageNumber, children }: {
  * @param onAddTable Setter function adding a table object to section of the document. This is done with a (row, column) input
  * @param onDeleteTable Deletion function removing a table object from section of the document
  * @param onUpdateCell Setter function updating a cell value of a given table for a section block in the document
- * @param children Existing subsections and subtables of a particular section block in the document are fed into this parameter 
+ * @param children Existing subsections and subtables of a particular section block in the document are fed into this parameter
  * @returns A JSX Section Block Component
  */
 export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fields,
-  onSelect, onUpdate, onAddChild, onAddSibling, onDelete, onToggleLock,
-  onAddTable, onDeleteTable, onUpdateCell, onClickBlank, onDeleteBlank, children }: {
+                                       onSelect, onUpdate, onAddChild, onAddSibling, onDelete, onToggleLock,
+                                       onAddTable, onDeleteTable, onUpdateCell, onClickBlank, onDeleteBlank, children }: {
   section: SectionNode; depth: number; isOnlyTop: boolean; isSelected: boolean;
   fields: TemplateField[];
   onSelect: () => void;
@@ -336,96 +556,96 @@ export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fi
   const headingClass = depth === 0 ? "text-2xl font-bold" : depth === 1 ? "text-xl font-semibold" : "text-lg font-medium";
 
   return (
-    <div ref={setNodeRef} style={style} id={section.id}
-      className={`relative ${section.lockEdit ? "locked-overlay" : ""} ${isSelected ? "ring-2 ring-primary/30 rounded" : ""}`}
-      onClick={e => { e.stopPropagation(); onSelect(); }}
-      onMouseEnter={() => setHovered(true)} onMouseLeave={() => { setHovered(false); setShowTableForm(false); }}>
+      <div ref={setNodeRef} style={style} id={section.id}
+           className={`relative ${section.lockEdit ? "locked-overlay" : ""} ${isSelected ? "ring-2 ring-primary/30 rounded" : ""}`}
+           onClick={e => { e.stopPropagation(); onSelect(); }}
+           onMouseEnter={() => setHovered(true)} onMouseLeave={() => { setHovered(false); setShowTableForm(false); }}>
 
-      {/* Hover toolbar */}
-      {hovered && (
-        <div className="absolute -top-1 right-0 flex gap-1 bg-white border border-gray-200 rounded shadow-md px-1.5 py-1 z-20 text-xs whitespace-nowrap">
-          {/* Drag handle */}
-          <button {...attributes} {...listeners} className="drag-handle px-1 py-0.5 rounded flex items-center" title="Drag to reorder">
-            <GripVertical className="h-3 w-3" />
-          </button>
-          <button onClick={onToggleLock} title={section.lockEdit ? "Unlock section" : "Lock section"}
-            className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
-            {section.lockEdit ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
-          </button>
-          <button onClick={onAddChild} title="Add subsection" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
-            <Plus className="h-3 w-3" /> Sub
-          </button>
-          <button onClick={onAddSibling} title="Add section at same level" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
-            <Plus className="h-3 w-3" /> Section
-          </button>
-          <button onClick={() => setShowTableForm(t => !t)} title="Add table" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
-            <TableIcon className="h-3 w-3" /> Table
-          </button>
-          <button onClick={onDelete} disabled={isOnlyTop} title="Delete section"
-            className="hover:bg-red-50 px-1.5 py-0.5 rounded flex items-center gap-1 text-red-500 disabled:opacity-30">
-            <Trash2 className="h-3 w-3" />
-          </button>
-        </div>
-      )}
-
-      {/* Table size picker */}
-      {showTableForm && (
-        <div className="flex items-center gap-2 mb-2 p-2 bg-gray-50 border border-gray-200 rounded text-xs">
-          <span className="text-gray-600">Rows (1-20):</span>
-          <input type="number" min={1} max={20} value={tr} onChange={e => setTr(Number(e.target.value) || 3)} className="w-12 border rounded px-1 py-0.5" />
-          <span className="text-gray-600">× Cols (1-10):</span>
-          <input type="number" min={1} max={10} value={tc} onChange={e => setTc(Number(e.target.value) || 3)} className="w-12 border rounded px-1 py-0.5" />
-          <button onClick={() => { onAddTable(tr, tc); setShowTableForm(false); }}
-            className="bg-primary text-primary-foreground px-2 py-0.5 rounded hover:opacity-90">Add</button>
-          <button onClick={() => setShowTableForm(false)} className="px-2 py-0.5 rounded hover:bg-gray-200 text-gray-600">Cancel</button>
-        </div>
-      )}
-
-      {/* Section heading */}
-      <div className="flex items-baseline gap-2 mb-1" style={{ marginLeft: `${depth * 16}px` }}>
-        {section.lockEdit && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
-        <span className="font-mono text-gray-400 shrink-0 text-sm select-none">{section.number}</span>
-        <EditableText value={section.title} onChange={v => onUpdate({ title: v })} className={headingClass} placeholder="Section title..." disabled={false} />
-      </div>
-
-      {/* Section body — uses SectionContent for blank rendering */}
-      <div className="ml-8" style={{ marginLeft: `${depth * 16 + 32}px` }}>
-        <SectionContent content={section.content} fields={fields} locked={false /*section.locked*/}
-          onClickBlank={onClickBlank} onDeleteBlank={onDeleteBlank}
-          onChange={v => onUpdate({ content: v })} />
-      </div>
-
-      {/* Tables */}
-      {section.tables && section.tables.length > 0 && (
-        <div className="mt-3 space-y-4" style={{ marginLeft: `${depth * 16 + 32}px` }}>
-          {section.tables.map(table => (
-            <div key={table.id}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-400 font-mono">{table.rows}×{table.cols} table</span>
-                <button onClick={() => onDeleteTable(table.id)} className="text-red-400 hover:text-red-600"><Trash2 className="h-3 w-3" /></button>
-              </div>
-              <table className="border-collapse text-xs w-full">
-                <tbody>
-                  {table.data.map((row, ri) => (
-                    <tr key={ri}>
-                      {row.map((cell, ci) => (
-                        <td key={ci} className="border border-gray-300 p-0">
-                          <input value={cell} onChange={e => onUpdateCell(table.id, ri, ci, e.target.value)}
-                            className="w-full p-1.5 outline-none focus:bg-blue-50" placeholder={`r${ri + 1}c${ci + 1}`} />
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+        {/* Hover toolbar */}
+        {hovered && (
+            <div className="absolute -top-1 right-0 flex gap-1 bg-white border border-gray-200 rounded shadow-md px-1.5 py-1 z-20 text-xs whitespace-nowrap">
+              {/* Drag handle */}
+              <button {...attributes} {...listeners} className="drag-handle px-1 py-0.5 rounded flex items-center" title="Drag to reorder">
+                <GripVertical className="h-3 w-3" />
+              </button>
+              <button onClick={onToggleLock} title={section.lockEdit ? "Unlock section" : "Lock section"}
+                      className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
+                {section.lockEdit ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+              </button>
+              <button onClick={onAddChild} title="Add subsection" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
+                <Plus className="h-3 w-3" /> Sub
+              </button>
+              <button onClick={onAddSibling} title="Add section at same level" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
+                <Plus className="h-3 w-3" /> Section
+              </button>
+              <button onClick={() => setShowTableForm(t => !t)} title="Add table" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
+                <TableIcon className="h-3 w-3" /> Table
+              </button>
+              <button onClick={onDelete} disabled={isOnlyTop} title="Delete section"
+                      className="hover:bg-red-50 px-1.5 py-0.5 rounded flex items-center gap-1 text-red-500 disabled:opacity-30">
+                <Trash2 className="h-3 w-3" />
+              </button>
             </div>
-          ))}
-        </div>
-      )}
+        )}
 
-      {/* Recursively rendered children */}
-      {children}
-    </div>
+        {/* Table size picker */}
+        {showTableForm && (
+            <div className="flex items-center gap-2 mb-2 p-2 bg-gray-50 border border-gray-200 rounded text-xs">
+              <span className="text-gray-600">Rows (1-20):</span>
+              <input type="number" min={1} max={20} value={tr} onChange={e => setTr(Number(e.target.value) || 3)} className="w-12 border rounded px-1 py-0.5" />
+              <span className="text-gray-600">× Cols (1-10):</span>
+              <input type="number" min={1} max={10} value={tc} onChange={e => setTc(Number(e.target.value) || 3)} className="w-12 border rounded px-1 py-0.5" />
+              <button onClick={() => { onAddTable(tr, tc); setShowTableForm(false); }}
+                      className="bg-primary text-primary-foreground px-2 py-0.5 rounded hover:opacity-90">Add</button>
+              <button onClick={() => setShowTableForm(false)} className="px-2 py-0.5 rounded hover:bg-gray-200 text-gray-600">Cancel</button>
+            </div>
+        )}
+
+        {/* Section heading */}
+        <div className="flex items-baseline gap-2 mb-1" style={{ marginLeft: `${depth * 16}px` }}>
+          {section.lockEdit && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
+          <span className="font-mono text-gray-400 shrink-0 text-sm select-none">{section.number}</span>
+          <EditableText value={section.title} onChange={v => onUpdate({ title: v })} className={headingClass} placeholder="Section title..." disabled={false} />
+        </div>
+
+        {/* Section body — uses SectionContent for blank rendering */}
+        <div className="ml-8" style={{ marginLeft: `${depth * 16 + 32}px` }}>
+          <SectionContent content={section.content} fields={fields} locked={false}
+                          onClickBlank={onClickBlank} onDeleteBlank={onDeleteBlank}
+                          onChange={v => onUpdate({ content: v })} />
+        </div>
+
+        {/* Tables */}
+        {section.tables && section.tables.length > 0 && (
+            <div className="mt-3 space-y-4" style={{ marginLeft: `${depth * 16 + 32}px` }}>
+              {section.tables.map(table => (
+                  <div key={table.id}>
+                    <div className="flex items-center justify-between mb-1">
+                      <span className="text-xs text-gray-400 font-mono">{table.rows}×{table.cols} table</span>
+                      <button onClick={() => onDeleteTable(table.id)} className="text-red-400 hover:text-red-600"><Trash2 className="h-3 w-3" /></button>
+                    </div>
+                    <table className="border-collapse text-xs w-full">
+                      <tbody>
+                      {table.data.map((row, ri) => (
+                          <tr key={ri}>
+                            {row.map((cell, ci) => (
+                                <td key={ci} className="border border-gray-300 p-0">
+                                  <input value={cell} onChange={e => onUpdateCell(table.id, ri, ci, e.target.value)}
+                                         className="w-full p-1.5 outline-none focus:bg-blue-50" placeholder={`r${ri + 1}c${ci + 1}`} />
+                                </td>
+                            ))}
+                          </tr>
+                      ))}
+                      </tbody>
+                    </table>
+                  </div>
+              ))}
+            </div>
+        )}
+
+        {/* Recursively rendered children */}
+        {children}
+      </div>
   );
 }
 
@@ -442,32 +662,32 @@ function SortableNavItem({ section, depth, isExpanded, onToggleExpand, onSelect,
   const hasChildren = section.children.length > 0;
 
   return (
-    <div ref={setNodeRef} style={style}>
-      <div className={`w-full flex items-center gap-1 rounded px-2 py-1.5 text-xs transition-colors
+      <div ref={setNodeRef} style={style}>
+        <div className={`w-full flex items-center gap-1 rounded px-2 py-1.5 text-xs transition-colors
           ${isSelected ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted"}`}
-        style={{ paddingLeft: `${8 + depth * 12}px` }}>
-        <button {...attributes} {...listeners} className="drag-handle p-0.5 rounded inline-flex shrink-0">
-          <GripVertical className="h-3 w-3" />
-        </button>
-        {hasChildren
-          ? <span onClick={e => { e.stopPropagation(); onToggleExpand(); }} className="cursor-pointer hover:bg-accent rounded p-0.5 inline-flex shrink-0">
+             style={{ paddingLeft: `${8 + depth * 12}px` }}>
+          <button {...attributes} {...listeners} className="drag-handle p-0.5 rounded inline-flex shrink-0">
+            <GripVertical className="h-3 w-3" />
+          </button>
+          {hasChildren
+              ? <span onClick={e => { e.stopPropagation(); onToggleExpand(); }} className="cursor-pointer hover:bg-accent rounded p-0.5 inline-flex shrink-0">
               {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
             </span>
-          : <div className="w-4 shrink-0" />}
-        <button onClick={onSelect} className="flex items-center gap-1 flex-1 min-w-0 text-left">
-          {section.lockEdit && <Lock className="h-2.5 w-2.5 text-slate-400 shrink-0" />}
-          <span className="font-mono text-gray-400 min-w-[35px] shrink-0">{section.number}</span>
-          <span className="truncate">{section.title}</span>
-        </button>
+              : <div className="w-4 shrink-0" />}
+          <button onClick={onSelect} className="flex items-center gap-1 flex-1 min-w-0 text-left">
+            {section.lockEdit && <Lock className="h-2.5 w-2.5 text-slate-400 shrink-0" />}
+            <span className="font-mono text-gray-400 min-w-[35px] shrink-0">{section.number}</span>
+            <span className="truncate">{section.title}</span>
+          </button>
+        </div>
       </div>
-    </div>
   );
 }
 
 // ============= PURE SECTION HELPERS =============
 // These functions take a section tree in and return a new tree out — no state mutations.
 // Called inside setData() so they always operate on the latest state snapshot.
- 
+
 // Assigns correct auto-numbers to the entire tree. Top-level = "1.0", children = "1.1", "1.1.1" etc.
 function renumberSections(sections: SectionNode[], prefix = ""): SectionNode[] {
   return sections.map((s, i) => {
@@ -490,8 +710,8 @@ function updateSection(sections: SectionNode[], id: string, updates: Partial<Sec
 // Appends a blank subsection inside the given parent
 function addChildSection(sections: SectionNode[], parentId: string): SectionNode[] {
   return sections.map(s => s.id === parentId
-    ? { ...s, children: [...s.children, { id: `sec-${Date.now()}`, number: "", title: "New Subsection", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] }] }
-    : { ...s, children: addChildSection(s.children, parentId) });
+      ? { ...s, children: [...s.children, { id: `sec-${Date.now()}`, number: "", title: "New Subsection", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] }] }
+      : { ...s, children: addChildSection(s.children, parentId) });
 }
 
 // Inserts a new section directly after the sibling at the same nesting level
@@ -556,94 +776,43 @@ function SowEditPageInner() {
   // If ?setup= param is present (base64 JSON from the /new form), decode and override defaults.
   const defaultData: TemplateData = useMemo(() => {
     const base: TemplateData = {
-      documentName: "Untitled SOW",
-      // Each entry here is a blank the admin inserted via the blank form in the edit page.
-      // The id must exactly match the token embedded in the section content string below.
-      fields: [
-        { id: "field_product_name_001",       label: "Product Name",                    type: "text",      placeholder: "e.g. F-16 Avionics Suite",         required: true  },
-        { id: "field_contractor_tasks_002",    label: "Contractor Tasks",                type: "sentence",  placeholder: "e.g. install, maintain, and test",  required: true  },
-        { id: "field_contractor_service_003",  label: "Service Description",             type: "sentence",  placeholder: "e.g. provide 24/7 technical support",required: true  },
-        { id: "field_items_purchased_004",     label: "Items to be Purchased",           type: "text",      placeholder: "e.g. hydraulic actuators",          required: true  },
-        { id: "field_install_location_005",    label: "Installation Location",           type: "text",      placeholder: "e.g. Tinker AFB, Building 3001",    required: true  },
-        { id: "field_use_purpose_006",         label: "Purpose of Use",                  type: "sentence",  placeholder: "e.g. F-16 maintenance operations",  required: false },
-        { id: "field_delivery_location_007",   label: "Delivery Location",               type: "text",      placeholder: "e.g. Dock B, Building 3001",        required: false },
-        { id: "field_applicable_stds_008",     label: "Applicable Standards",            type: "paragraph", placeholder: "List any additional standards...",  required: false },
-        { id: "field_prohibited_mats_009",     label: "Prohibited Materials",            type: "paragraph", placeholder: "List any prohibited materials...",  required: false },
-        { id: "field_written_submittals_010",  label: "Written Submittals",              type: "paragraph", placeholder: "Describe required documentation...",required: false },
-        { id: "field_gfp_details_011",         label: "Government Furnished Property",   type: "paragraph", placeholder: "List any GFP items provided...",    required: false },
-      ],
+      documentName: "SOW ID",
+      fields: [],
       coverPage: {
-        title: "Statement of Work",
-        projectNumber: "SOW-2026-001",
-        clientName: "",
-        building: "",
-        location: "",
-        preparedBy: "",
-        department: "",
-        date: new Date().toISOString().split("T")[0],
-        version: "1.0",
-        confidentiality: "Confidential",
+        title: "Statement of Work (SOW)", projectNumber: "SOW-2026-001", clientName: "Product Name",
+        building: "{Building}", location: "{Location}", preparedBy: "{Team or Individual}",
+        department: "{Department}", date: new Date().toISOString().split("T")[0],
+        version: "1.0", confidentiality: "Confidential",
       },
       headerFooter: {
-        headerLeft: "Statement of Work",
-        headerCenter: "",
-        headerRight: "",
-        footerLeft: "SOW-2026-001",
-        footerCenter: "",
-        footerRight: "Page {PAGE}",
-        showPageNumbers: true,
-        pageNumberPosition: "footer-right",
+        headerLeft: "Statement of Work\n3 February 2025", headerCenter: "", headerRight: "",
+        footerLeft: "SOW-2026-001", footerCenter: "", footerRight: "Page {PAGE}",
+        showPageNumbers: true, pageNumberPosition: "footer-right",
       },
       sections: [
-        {
-          id: "sec-1", number: "1.0", title: "Scope of Work", content: "", locked: true, tables: [],
+        { id: "sec-1", number: "1.0", title: "Scope of Work", content: "{{field_additional_scope_details_1776447594151}}", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [],
           children: [
-            // Unlocked - engineer edits freely. Blanks here are still filled via the questionnaire.
-            {
-              id: "sec-1-1", number: "1.1", title: "Scope", locked: false, tables: [], children: [],
-              content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {{field_product_name_001}}. The contractor should {{field_contractor_tasks_002}} and {{field_contractor_service_003}}.",
-            },
-            {
-              id: "sec-1-2", number: "1.2", title: "Background", locked: false, tables: [], children: [],
-              content: "The {{field_items_purchased_004}} are intended to be used at {{field_install_location_005}} for {{field_use_purpose_006}}. The items should be delivered to {{field_delivery_location_007}}.",
-            },
-          ],
+            { id: "sec-1-1", number: "1.1", title: "Scope", content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {YOUR PRODUCT}. The contractor should {do these things} and {provide this service}.", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
+            { id: "sec-1-2", number: "1.2", title: "Background", content: "The {items to be purchased} are intended to be used at {a location} for {a purpose}. {the items} shoud be delivered to {a location} ", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
+          ]
         },
-        {
-          id: "sec-2", number: "2.0", title: "Applicable Standards", locked: true, tables: [],
-          content: "Contractor, at a minimum, is required to comply with the current editions of the following requirements for design, construction, installation, and safety as applicable.",
+        { id: "sec-2", number: "2.0", title: "Applicable Standards", content: "Contractor, at a minimum, is required to comply with the current editions of the following requirements for design, construction, installation, and safety as applicable. The term “most recent edition” shall be understood to mean “most recently released edition as of date of issuance of contract.” ", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [],
           children: [
-            { id: "sec-2-1", number: "2.1", title: "Government Standards",    content: "The following documents form a part of this purchase description to the extent stipulated herein.",  locked: true, tables: [], children: [] },
-            { id: "sec-2-2", number: "2.2", title: "Non-Government Standards", content: "The following documents form a part of this document to the extent stipulated herein.",              locked: true, tables: [], children: [] },
-            { id: "sec-2-3", number: "2.3", title: "Order of Precedence",      content: "In the event of a conflict between the text of this specification and the references cited herein, the text of this specification takes precedence.", locked: true, tables: [], children: [] },
-            // Locked with blank - engineer fills via questionnaire bar or inline input
-            { id: "sec-2-4", number: "2.4", title: "Applicable Standards",    content: "{{field_applicable_stds_008}}",   locked: true, tables: [], children: [] },
-            { id: "sec-2-5", number: "2.5", title: "Prohibited Materials",    content: "{{field_prohibited_mats_009}}",    locked: true, tables: [], children: [] },
-            { id: "sec-2-6", number: "2.6", title: "Environmental Protection", content: "Under the operating, service, transportation and storage conditions described herein the machine shall not emit materials hazardous to the ecological system as prohibited by federal, state or local statutes in effect at the point of installation.", locked: true, tables: [], children: [] },
-          ],
+            { id: "sec-2-1", number: "2.1", title: "Government Standards", content: "The following documents form a part of this purchase description to the extent stipulated herein.", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
+            { id: "sec-2-2", number: "2.2", title: "Non-Government Standards", content: "The following documents form a part of this document to the extent stipulated herein. ", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
+            { id: "sec-2-3", number: "2.3", title: "Order of Precedence", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
+            { id: "sec-2-4", number: "2.4", title: "Applicable Standards", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
+            { id: "sec-2-5", number: "2.5", title: "Prohibited Materials", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
+            { id: "sec-2-6", number: "2.6", title: "Environmental Protection", content: "Under the operating, service, transportation and storage conditions described herein the machine shall not emit materials hazardous to the ecological system as prohibited by federal, state or local statutes in effect at the point of installation. ", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
+          ]
         },
-        // Locked with blanks - lock states now match the admin edit page defaults
-        { id: "sec-3", number: "3.0", title: "Written Submittals",                       content: "{{field_written_submittals_010}}", locked: true, tables: [], children: [] },
-        { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "{{field_gfp_details_011}}",        locked: true, tables: [], children: [] },
+        { id: "sec-3", number: "3.0", title: "Written Submittals", content: "", lockEdit: true, lockDelete: true, lockAddTable: false, lockAddSections: true, tables: [], children: [] },
+        { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: false, tables: [], children: [] },
       ],
     };
 
     return base;
   }, [searchParams]);
-
-  //update defaultData with db data if present
-  useEffect(() => {
-    const loadData = async () => {
-      try {
-        const dbData = await getGlobalTemplate();
-        if (dbData){
-        setData(dbData as TemplateData);}
-      } catch (e) {
-        console.error("Failed to load template from IndexedDB:", e);
-      }
-    };
-    loadData();
-  }, []);
 
   const [data, setData] = useState<TemplateData>(defaultData); // Primary document state — all edits call setData with functional updates to avoid stale closures
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(defaultData.sections.map(s => s.id))); // Tracks which section IDs are expanded in the left navigator
@@ -656,68 +825,147 @@ function SowEditPageInner() {
   const [blankLabel, setBlankLabel] = useState("");
   const [blankType, setBlankType] = useState<FieldType>("text");
   const [blankPlaceholder, setBlankPlaceholder] = useState("");
+  const [blankOptions, setBlankOptions] = useState(""); // Comma-separated list for dropdown options
   const [blankRequired, setBlankRequired] = useState(false);
 
   // Blank editing state
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
 
+  // ── Ribbon state ──
+  const [activeTab, setActiveTab] = useState<RibbonTab>("home");
+  const [formatState, setFormatState] = useState({
+    bold: false, italic: false, underline: false, strikethrough: false,
+    fontName: "Arial", fontSize: "3",
+  });
+  const [textColor, setTextColor] = useState("#000000");
+  const [highlightColor, setHighlightColor] = useState("#ffff00");
+  const savedSelectionRef = useRef<Range | null>(null);
+
   const selectedSection = selectedSectionId ? findSection(data.sections, selectedSectionId) : null;
+
+  // Track formatting state at cursor via selectionchange
+  useEffect(() => {
+    const handleSelectionChange = () => {
+      setFormatState({
+        bold: document.queryCommandState("bold"),
+        italic: document.queryCommandState("italic"),
+        underline: document.queryCommandState("underline"),
+        strikethrough: document.queryCommandState("strikeThrough"),
+        fontName: document.queryCommandValue("fontName")?.replace(/['"]/g, "") || "Arial",
+        fontSize: document.queryCommandValue("fontSize") || "3",
+      });
+
+      // Maintain a persistent reference to the last text selection inside the editor
+      const sel = window.getSelection();
+      if (sel && sel.rangeCount > 0) {
+        let node = sel.anchorNode;
+        let isEditor = false;
+        while (node && node.nodeName !== 'BODY') {
+          if ((node as Element).hasAttribute && (node as Element).hasAttribute('contenteditable')) {
+            isEditor = true;
+            break;
+          }
+          node = node.parentNode;
+        }
+        if (isEditor) {
+          savedSelectionRef.current = sel.getRangeAt(0).cloneRange();
+        }
+      }
+    };
+    document.addEventListener("selectionchange", handleSelectionChange);
+    return () => document.removeEventListener("selectionchange", handleSelectionChange);
+  }, []);
+
+  // Save current selection (for restoring after dropdown interactions)
+  const saveSelection = useCallback(() => {
+    const sel = window.getSelection();
+    if (sel && sel.rangeCount > 0) savedSelectionRef.current = sel.getRangeAt(0).cloneRange();
+  }, []);
+  const restoreSelection = useCallback(() => {
+    const range = savedSelectionRef.current;
+    if (range) { const sel = window.getSelection(); if (sel) { sel.removeAllRanges(); sel.addRange(range); } }
+  }, []);
+
+  // Execute formatting command on the current selection
+  const handleFormat = useCallback((command: string, value?: string) => {
+    document.execCommand(command, false, value);
+    setFormatState({
+      bold: document.queryCommandState("bold"),
+      italic: document.queryCommandState("italic"),
+      underline: document.queryCommandState("underline"),
+      strikethrough: document.queryCommandState("strikeThrough"),
+      fontName: document.queryCommandValue("fontName")?.replace(/['"]/g, "") || "Arial",
+      fontSize: document.queryCommandValue("fontSize") || "3",
+    });
+  }, []);
+
+  // Global keyboard shortcut: Cmd/Ctrl+S to save document
+  // (handleSave is defined below, so we use a ref to avoid stale closure)
+  const handleSaveRef = useRef<() => void>(() => {});
 
   // DnD sensors - PointerSensor requires 5px movement before activating to avoid accidental drags
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor)
+      useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+      useSensor(KeyboardSensor)
   );
 
   // Shorthand updaters for cover page and header/footer fields
   const updateCover = (k: keyof typeof data.coverPage, v: string) =>
-    setData(p => ({ ...p, coverPage: { ...p.coverPage, [k]: v } }));
+      setData(p => ({ ...p, coverPage: { ...p.coverPage, [k]: v } }));
   const updateHF = (k: keyof HeaderFooterData, v: string) =>
-    setData(p => ({ ...p, headerFooter: { ...p.headerFooter, [k]: v } }));
+      setData(p => ({ ...p, headerFooter: { ...p.headerFooter, [k]: v } }));
   function toggleExpand(id: string) {
     setExpandedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
   }
 
   // Save / Load / Export
-  // handleSave goes straight to DB
+  // handleSave serializes state to JSON and triggers a browser file download — no server involved
   function handleSave() {
-    startTransition(async () => {
-      const result = await saveGlobalTemplate(data);
-      if (result.success) {
-        alert("The SOW template has been saved.");
-      }
-    });
-    // const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    // const url = URL.createObjectURL(blob);
-    // const a = document.createElement("a");
-    // a.href = url;
-    // a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.json`;
-    // a.click(); URL.revokeObjectURL(url);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.json`;
+    a.click(); URL.revokeObjectURL(url);
   }
+  handleSaveRef.current = handleSave;
+
+  // Global Cmd/Ctrl+S shortcut to save document
+  useEffect(() => {
+    const handleGlobalKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        handleSaveRef.current();
+      }
+    };
+    document.addEventListener("keydown", handleGlobalKeyDown);
+    return () => document.removeEventListener("keydown", handleGlobalKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // handleLoadJSON opens a file picker, reads the JSON file, and replaces the current document
-  // function handleLoadJSON() {
-  //   const input = document.createElement("input");
-  //   input.type = "file"; input.accept = ".json";
-  //   input.onchange = (e: Event) => {
-  //     const file = (e.target as HTMLInputElement).files?.[0]; if (!file) return;
-  //     const reader = new FileReader();
-  //     reader.onload = ev => {
-  //       try {
-  //         const loaded = JSON.parse(ev.target?.result as string);
-  //         setData(loaded); setEditedName(loaded.documentName || "Untitled Document");
-  //         setExpandedIds(new Set(loaded.sections.map((s: SectionNode) => s.id)));
-  //       } catch { alert("Invalid JSON file"); }
-  //     };
-  //     reader.readAsText(file);
-  //   };
-  //   input.click();
-  // }
+  function handleLoadJSON() {
+    const input = document.createElement("input");
+    input.type = "file"; input.accept = ".json";
+    input.onchange = (e: Event) => {
+      const file = (e.target as HTMLInputElement).files?.[0]; if (!file) return;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        try {
+          const loaded = JSON.parse(ev.target?.result as string);
+          setData(loaded); setEditedName(loaded.documentName || "Untitled Document");
+          setExpandedIds(new Set(loaded.sections.map((s: SectionNode) => s.id)));
+        } catch { alert("Invalid JSON file"); }
+      };
+      reader.readAsText(file);
+    };
+    input.click();
+  }
 
   // handleExport is a placeholder — planned: Next.js API → sanitize → Flask → python-docx → .docx download
-  // function handleExport() {
-  //   alert("Export to Word will generate a .docx file. Backend integration coming soon!");
-  // }
+  function handleExport() {
+    alert("Export to Word will generate a .docx file. Backend integration coming soon!");
+  }
 
   // ── Insert Blank ──
   // Creates a new TemplateField, appends its {{fieldId}} token to the selected section's content,
@@ -728,17 +976,27 @@ function SowEditPageInner() {
     const newField: TemplateField = {
       id: fieldId, label: blankLabel.trim(), type: blankType,
       placeholder: blankPlaceholder || undefined, required: blankRequired,
+      options: blankType === "dropdown" ? blankOptions.split(",").map(s => s.trim()).filter(Boolean) : undefined,
     };
-    setData(p => {
-      const sec = findSection(p.sections, selectedSectionId);
-      const newContent = sec ? (sec.content ? sec.content + ` {{${fieldId}}}` : `{{${fieldId}}}`) : "";
-      return {
-        ...p,
-        fields: [...p.fields, newField],
-        sections: updateSection(p.sections, selectedSectionId, { content: newContent }),
-      };
-    });
-    setBlankLabel(""); setBlankPlaceholder(""); setBlankRequired(false);
+
+    if (savedSelectionRef.current) {
+      restoreSelection();
+      const fieldHtml = `<span contenteditable="false" class="blank-chip" data-id="${fieldId}" data-type="${blankType}"><span>${blankLabel.trim()}</span><span class="opacity-60 text-[10px]" style="pointer-events: none;">(${blankType})</span></span>&nbsp;`;
+      document.execCommand("insertHTML", false, fieldHtml);
+      setData(p => ({ ...p, fields: [...p.fields, newField] }));
+    } else {
+      setData(p => {
+        const sec = findSection(p.sections, selectedSectionId);
+        const newContent = sec ? (sec.content ? sec.content + ` {{${fieldId}}}` : `{{${fieldId}}}`) : "";
+        return {
+          ...p,
+          fields: [...p.fields, newField],
+          sections: updateSection(p.sections, selectedSectionId, { content: newContent }),
+        };
+      });
+    }
+
+    setBlankLabel(""); setBlankPlaceholder(""); setBlankRequired(false); setBlankOptions("");
     setShowBlankForm(false);
   }
 
@@ -776,58 +1034,58 @@ function SowEditPageInner() {
   // All mutation callbacks defined here so they can close over setData from this component.
   function renderSections(sections: SectionNode[], depth = 0): React.ReactNode {
     return (
-      <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
-        {sections.map(section => {
-          const onUpdate = (u: Partial<SectionNode>) => setData(p => ({ ...p, sections: updateSection(p.sections, section.id, u) }));
-          const onAddChild = () => {
-            setData(p => ({ ...p, sections: renumberSections(addChildSection(p.sections, section.id)) }));
-            setExpandedIds(p => new Set([...p, section.id]));
-          };
-          const onAddSibling = () => setData(p => {
-            const r = addSiblingHelper(p.sections, section.id);
-            return r.added ? { ...p, sections: renumberSections(r.sections) } : p;
-          });
-          const onDelete = () => {
-            if (!confirm("Delete this section and all its subsections?")) return;
-            setData(p => ({ ...p, sections: renumberSections(deleteSection(p.sections, section.id)) }));
-            if (selectedSectionId === section.id) setSelectedSectionId(null);
-          };
-          const onToggleLock = () => setData(p => ({ ...p, sections: updateSection(p.sections, section.id, { lockEdit: !section.lockEdit }) }));
-          const onAddTable = (rows: number, cols: number) => {
-            if (rows < 1 || rows > 20 || cols < 1 || cols > 10) { alert("Rows: 1-20, Columns: 1-10"); return; }
-            const newTable: TableData = { id: `t-${Date.now()}`, rows, cols, data: Array(rows).fill(null).map(() => Array(cols).fill("")) };
-            setData(p => {
-              const sec = findSection(p.sections, section.id);
-              return { ...p, sections: updateSection(p.sections, section.id, { tables: [...(sec?.tables || []), newTable] }) };
+        <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
+          {sections.map(section => {
+            const onUpdate = (u: Partial<SectionNode>) => setData(p => ({ ...p, sections: updateSection(p.sections, section.id, u) }));
+            const onAddChild = () => {
+              setData(p => ({ ...p, sections: renumberSections(addChildSection(p.sections, section.id)) }));
+              setExpandedIds(p => new Set([...p, section.id]));
+            };
+            const onAddSibling = () => setData(p => {
+              const r = addSiblingHelper(p.sections, section.id);
+              return r.added ? { ...p, sections: renumberSections(r.sections) } : p;
             });
-          };
-          const onDeleteTable = (tid: string) => setData(p => {
-            const sec = findSection(p.sections, section.id);
-            return { ...p, sections: updateSection(p.sections, section.id, { tables: sec?.tables?.filter(t => t.id !== tid) }) };
-          });
-          // Updates a single cell — maps over rows and cells, replacing only the one that changed
-          const onUpdateCell = (tid: string, row: number, col: number, val: string) => setData(p => {
-            const sec = findSection(p.sections, section.id);
-            const tables = sec?.tables?.map(t => t.id === tid
-              ? { ...t, data: t.data.map((r, ri) => r.map((c, ci) => ri === row && ci === col ? val : c)) } : t);
-            return { ...p, sections: updateSection(p.sections, section.id, { tables }) };
-          });
+            const onDelete = () => {
+              if (!confirm("Delete this section and all its subsections?")) return;
+              setData(p => ({ ...p, sections: renumberSections(deleteSection(p.sections, section.id)) }));
+              if (selectedSectionId === section.id) setSelectedSectionId(null);
+            };
+            const onToggleLock = () => setData(p => ({ ...p, sections: updateSection(p.sections, section.id, { lockEdit: !section.lockEdit }) }));
+            const onAddTable = (rows: number, cols: number) => {
+              if (rows < 1 || rows > 20 || cols < 1 || cols > 10) { alert("Rows: 1-20, Columns: 1-10"); return; }
+              const newTable: TableData = { id: `t-${Date.now()}`, rows, cols, data: Array(rows).fill(null).map(() => Array(cols).fill("")) };
+              setData(p => {
+                const sec = findSection(p.sections, section.id);
+                return { ...p, sections: updateSection(p.sections, section.id, { tables: [...(sec?.tables || []), newTable] }) };
+              });
+            };
+            const onDeleteTable = (tid: string) => setData(p => {
+              const sec = findSection(p.sections, section.id);
+              return { ...p, sections: updateSection(p.sections, section.id, { tables: sec?.tables?.filter(t => t.id !== tid) }) };
+            });
+            // Updates a single cell — maps over rows and cells, replacing only the one that changed
+            const onUpdateCell = (tid: string, row: number, col: number, val: string) => setData(p => {
+              const sec = findSection(p.sections, section.id);
+              const tables = sec?.tables?.map(t => t.id === tid
+                  ? { ...t, data: t.data.map((r, ri) => r.map((c, ci) => ri === row && ci === col ? val : c)) } : t);
+              return { ...p, sections: updateSection(p.sections, section.id, { tables }) };
+            });
 
-          return (
-            <SortableSectionBlock key={section.id} section={section} depth={depth}
-              isOnlyTop={depth === 0 && data.sections.length === 1}
-              isSelected={selectedSectionId === section.id}
-              fields={data.fields}
-              onSelect={() => setSelectedSectionId(section.id)}
-              onUpdate={onUpdate} onAddChild={onAddChild} onAddSibling={onAddSibling}
-              onDelete={onDelete} onToggleLock={onToggleLock}
-              onAddTable={onAddTable} onDeleteTable={onDeleteTable} onUpdateCell={onUpdateCell}
-              onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank}>
-              {section.children.length > 0 && renderSections(section.children, depth + 1)}
-            </SortableSectionBlock>
-          );
-        })}
-      </SortableContext>
+            return (
+                <SortableSectionBlock key={section.id} section={section} depth={depth}
+                                      isOnlyTop={depth === 0 && data.sections.length === 1}
+                                      isSelected={selectedSectionId === section.id}
+                                      fields={data.fields}
+                                      onSelect={() => setSelectedSectionId(section.id)}
+                                      onUpdate={onUpdate} onAddChild={onAddChild} onAddSibling={onAddSibling}
+                                      onDelete={onDelete} onToggleLock={onToggleLock}
+                                      onAddTable={onAddTable} onDeleteTable={onDeleteTable} onUpdateCell={onUpdateCell}
+                                      onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank}>
+                  {section.children.length > 0 && renderSections(section.children, depth + 1)}
+                </SortableSectionBlock>
+            );
+          })}
+        </SortableContext>
     );
   }
 
@@ -836,21 +1094,21 @@ function SowEditPageInner() {
   // Clicking selects a section and smooth-scrolls to it on the document page.
   function renderNav(sections: SectionNode[], depth = 0): React.ReactNode {
     return (
-      <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
-        {sections.map(section => {
-          const hasChildren = section.children.length > 0;
-          const isExpanded = expandedIds.has(section.id);
-          return (
-            <div key={section.id}>
-              <SortableNavItem section={section} depth={depth} isExpanded={isExpanded}
-                onToggleExpand={() => toggleExpand(section.id)}
-                onSelect={() => { setSelectedSectionId(section.id); document.getElementById(section.id)?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
-                isSelected={selectedSectionId === section.id} />
-              {hasChildren && isExpanded && renderNav(section.children, depth + 1)}
-            </div>
-          );
-        })}
-      </SortableContext>
+        <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
+          {sections.map(section => {
+            const hasChildren = section.children.length > 0;
+            const isExpanded = expandedIds.has(section.id);
+            return (
+                <div key={section.id}>
+                  <SortableNavItem section={section} depth={depth} isExpanded={isExpanded}
+                                   onToggleExpand={() => toggleExpand(section.id)}
+                                   onSelect={() => { setSelectedSectionId(section.id); document.getElementById(section.id)?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                                   isSelected={selectedSectionId === section.id} />
+                  {hasChildren && isExpanded && renderNav(section.children, depth + 1)}
+                </div>
+            );
+          })}
+        </SortableContext>
     );
   }
 
@@ -858,48 +1116,26 @@ function SowEditPageInner() {
   const editingField = editingFieldId ? data.fields.find(f => f.id === editingFieldId) : null;
 
   const handleReturnToNewForm = () => {
-    router.push("/login");
+    router.push("/");
   };
-  
+
 
   // ============= RENDER =============
   return (
-    <SidebarProvider>
-      <SidebarInset className="flex flex-col h-screen overflow-hidden">
+      <div className="flex flex-col h-screen overflow-hidden">
         {/* Slim header — just sidebar trigger + doc name */}
         <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4 bg-background sticky top-0 z-10">
           <div className="flex items-center gap-2">
-            <a href="/">
-                <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <Plane className="size-4" />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold uppercase tracking-tighter">
-                    SoWizard
-                  </span>
-                  <span className="truncate text-xs text-muted-foreground uppercase font-mono">
-                    Tinker AFB
-                  </span>
-                </div>
-              </a>
-            <SidebarTrigger className="-ml-1" />
-            <FileText className="h-4 w-4 text-primary" />
-            {isEditingName ? (
-              <div className="flex items-center gap-1">
-                <Input autoFocus value={editedName} onChange={e => setEditedName(e.target.value)} className="h-7 w-52 text-sm"
-                  onKeyDown={e => { if (e.key === "Enter") { setData(p => ({ ...p, documentName: editedName })); setIsEditingName(false); } if (e.key === "Escape") { setEditedName(data.documentName); setIsEditingName(false); } }} />
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setData(p => ({ ...p, documentName: editedName })); setIsEditingName(false); }}>Save</Button>
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditedName(data.documentName); setIsEditingName(false); }}>Cancel</Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1">
-                <span className="text-sm font-semibold">{data.documentName}</span>
-                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setIsEditingName(true)}><Edit2 className="h-3 w-3" /></Button>
-              </div>
-            )}
+            <button onClick={handleReturnToNewForm} className="hover:bg-muted rounded px-1.5 py-0.5 flex items-center gap-1">
+              <FileText className="h-4 w-4 text-primary" /> Return to Home
+            </button>
+
           </div>
-          <div className="text-xs text-muted-foreground">
-            {data.fields.length} blank{data.fields.length !== 1 ? "s" : ""} · {data.sections.length} section{data.sections.length !== 1 ? "s" : ""}
+          <div className="flex items-center gap-3">
+            <div className="text-xs text-muted-foreground">
+              {data.fields.length} blank{data.fields.length !== 1 ? "s" : ""} · {data.sections.length} section{data.sections.length !== 1 ? "s" : ""}
+            </div>
+            <ProfileMenu />
           </div>
         </header>
 
@@ -916,152 +1152,245 @@ function SowEditPageInner() {
 
             {/* Right: ribbon + document pages */}
             <div className="flex-1 flex flex-col overflow-hidden">
-              {/* ── Frosted Editing Ribbon ── */}
-              {/* Sticky toolbar above the document. Groups: File, Insert, Lock, Delete. */}
-              {/* Buttons requiring a selection are disabled when selectedSection is null. */}
-              <div className="editor-ribbon sticky top-0 z-30 px-3 py-1.5 flex items-center gap-1 shrink-0">
-                {/* File group */}
-                <RibbonBtn icon={Save} label="Save" onClick={handleSave} />
-                {/* <RibbonBtn icon={Download} label="Load" onClick={handleLoadJSON} />
-                <RibbonBtn icon={Download} label="Export" onClick={handleExport} /> */}
-                <div className="ribbon-divider" />
+              {/* ── Microsoft Word-Style Ribbon ── */}
+              {/* ── Microsoft Word-Style Ribbon ── */}
+              <Tabs value={activeTab} onValueChange={v => setActiveTab(v as RibbonTab)} className="editor-ribbon sticky top-0 z-30 shrink-0 bg-background border-b focus-visible:outline-none focus:outline-none">
+                {/* Tab bar */}
+                <div className="flex items-center px-2 bg-muted/10">
+                  <TabsList className="bg-transparent border-none p-0 h-auto gap-0 rounded-none focus-visible:outline-none focus:outline-none">
+                    {(["home", "insert", "layout"] as RibbonTab[]).map(tab => (
+                        <TabsTrigger key={tab} value={tab}
+                                     className="rounded-none border-t-0 border-x-0 border-b-2 border-b-transparent data-[state=active]:border-b-primary data-[state=active]:bg-background data-[state=active]:shadow-none outline-none ring-0 focus:ring-0 focus:outline-none focus-visible:ring-0 focus-visible:outline-none px-4 py-1.5 text-[11px] uppercase tracking-wide font-medium">
+                          {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                        </TabsTrigger>
+                    ))}
+                  </TabsList>
+                  <div className="flex-1" />
+                  {selectedSection && (
+                      <div className="flex items-center gap-1 px-3 text-xs text-muted-foreground self-center">
+                        <span className="font-mono">{selectedSection.number}</span>
+                        <span className="truncate max-w-[200px]">{selectedSection.title}</span>
+                      </div>
+                  )}
+                </div>
 
-                {/* Insert group */}
-                <RibbonBtn icon={Plus} label="Section" onClick={() => setData(p => ({
-                  ...p, sections: renumberSections([...p.sections, { id: `sec-${Date.now()}`, number: "", title: "New Section", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] }])
-                }))} />
-                <RibbonBtn icon={Plus} label="Sub" disabled={!selectedSection}
-                  onClick={() => {
-                    if (!selectedSectionId) return;
-                    setData(p => ({ ...p, sections: renumberSections(addChildSection(p.sections, selectedSectionId)) }));
-                    setExpandedIds(p => new Set([...p, selectedSectionId]));
-                  }} />
-                <RibbonBtn icon={PlusCircle} label="Blank" disabled={!selectedSection}
-                  onClick={() => setShowBlankForm(true)} />
-                <div className="ribbon-divider" />
+                {/* Active tab content */}
+                <div className="ribbon-content flex flex-row items-stretch px-2 py-1 bg-background" style={{ minHeight: '68px' }}>
+                  <TabsContent value="home" className="flex flex-row items-stretch gap-1 m-0 focus-visible:outline-none">
+                    <RibbonGroup label="Clipboard">
+                      <RibbonBtn icon={Undo2} label="Undo" onClick={() => handleFormat("undo")} />
+                      <RibbonBtn icon={Redo2} label="Redo" onClick={() => handleFormat("redo")} />
+                    </RibbonGroup>
 
-                {/* Lock group */}
-                <RibbonBtn icon={selectedSection?.lockEdit ? Lock : Unlock}
-                  label={"Lock Text"}
-                  active={selectedSection?.lockEdit}
-                  disabled={!selectedSection}
-                  onClick={() => {
-                    if (!selectedSectionId) return;
-                    setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockEdit: !selectedSection?.lockEdit }) }));
-                  }} />
-                <RibbonBtn icon={selectedSection?.lockDelete ? Lock : Unlock}
-                  label={"Lock Deletion"}
-                  active={selectedSection?.lockDelete}
-                  disabled={!selectedSection}
-                  onClick={() => {
-                    if (!selectedSectionId) return;
-                    setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockDelete: !selectedSection?.lockDelete }) }));
-                  }} />
-                <RibbonBtn icon={selectedSection?.lockAddTable ? Lock : Unlock}
-                  label={"Lock Tables"}
-                  active={selectedSection?.lockAddTable}
-                  disabled={!selectedSection}
-                  onClick={() => {
-                    if (!selectedSectionId) return;
-                    setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockAddTable: !selectedSection?.lockAddTable }) }));
-                  }} />
-                <RibbonBtn icon={selectedSection?.lockAddSections ? Lock : Unlock}
-                  label={"Lock Text"}
-                  active={selectedSection?.lockAddSections}
-                  disabled={!selectedSection}
-                  onClick={() => {
-                    if (!selectedSectionId) return;
-                    setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockAddSections: !selectedSection?.lockAddSections }) }));
-                  }} />
-                <div className="ribbon-divider" />
+                    <RibbonGroup label="Font">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-1">
+                          <Select value={FONT_FAMILIES.includes(formatState.fontName) ? formatState.fontName : "Arial"} onValueChange={v => { restoreSelection(); handleFormat("fontName", v); }}>
+                            <SelectTrigger className="w-[120px] h-7! px-2 text-[11px] rounded-md focus:ring-0 focus-visible:ring-0 shadow-none border-input hover:bg-accent">
+                              <SelectValue placeholder="Font" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {FONT_FAMILIES.map(f => (
+                                  <SelectItem key={f} value={f} style={{ fontFamily: f }}>{f}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
 
-                {/* Delete */}
-                <RibbonBtn icon={Trash2} label="Delete" danger disabled={!selectedSection || data.sections.length === 1}
-                  onClick={() => {
-                    if (!selectedSectionId || !confirm("Delete this section?")) return;
-                    setData(p => ({ ...p, sections: renumberSections(deleteSection(p.sections, selectedSectionId)) }));
-                    setSelectedSectionId(null);
-                  }} />
+                          <FontSizeInput formatState={formatState} restoreSelection={restoreSelection} handleFormat={handleFormat} />
+                        </div>
+                        <div className="flex items-center gap-0.5">
+                          <RibbonBtn icon={Bold} label="Bold" onClick={() => handleFormat("bold")} active={formatState.bold} />
+                          <RibbonBtn icon={Italic} label="Italic" onClick={() => handleFormat("italic")} active={formatState.italic} />
+                          <RibbonBtn icon={Underline} label="Underline" onClick={() => handleFormat("underline")} active={formatState.underline} />
+                          <RibbonBtn icon={Strikethrough} label="Strike" onClick={() => handleFormat("strikeThrough")} active={formatState.strikethrough} />
+                          <div className="ribbon-color-btn" title="Text color">
+                            <Type className="h-4 w-4" />
+                            <div className="ribbon-color-swatch" style={{ background: textColor }} />
+                            <input type="color" className="ribbon-color-input" value={textColor}
+                                   onMouseDown={saveSelection}
+                                   onChange={e => { setTextColor(e.target.value); restoreSelection(); handleFormat("foreColor", e.target.value); }} />
+                          </div>
+                          <div className="ribbon-color-btn" title="Highlight">
+                            <Highlighter className="h-4 w-4" />
+                            <div className="ribbon-color-swatch" style={{ background: highlightColor }} />
+                            <input type="color" className="ribbon-color-input" value={highlightColor}
+                                   onMouseDown={saveSelection}
+                                   onChange={e => { setHighlightColor(e.target.value); restoreSelection(); handleFormat("hiliteColor", e.target.value); }} />
+                          </div>
+                        </div>
+                      </div>
+                    </RibbonGroup>
 
-                {/* Spacer */}
-                <div className="flex-1" />
+                    <RibbonGroup label="Paragraph">
+                      <div className="flex flex-col gap-1">
+                        <div className="flex items-center gap-0.5">
+                          <RibbonBtn icon={AlignLeft} label="Left" onClick={() => handleFormat("justifyLeft")} />
+                          <RibbonBtn icon={AlignCenter} label="Center" onClick={() => handleFormat("justifyCenter")} />
+                          <RibbonBtn icon={AlignRight} label="Right" onClick={() => handleFormat("justifyRight")} />
+                          <RibbonBtn icon={AlignJustify} label="Justify" onClick={() => handleFormat("justifyFull")} />
+                        </div>
+                        <div className="flex items-center gap-0.5">
+                          <RibbonBtn icon={List} label="Bullets" onClick={() => handleFormat("insertUnorderedList")} />
+                          <RibbonBtn icon={ListOrdered} label="Numbers" onClick={() => handleFormat("insertOrderedList")} />
+                          <RibbonBtn icon={IndentDecrease} label="Outdent" onClick={() => handleFormat("outdent")} />
+                          <RibbonBtn icon={IndentIncrease} label="Indent" onClick={() => handleFormat("indent")} />
+                        </div>
+                      </div>
+                    </RibbonGroup>
 
-                {/* Selected section indicator */}
-                {selectedSection && (
-                  <div className="text-xs text-muted-foreground flex items-center gap-1">
-                    <span className="font-mono">{selectedSection.number}</span>
-                    <span className="truncate max-w-[200px]">{selectedSection.title}</span>
-                  </div>
-                )}
-              </div>
+                    <RibbonGroup label="Section">
+                      <RibbonBtn icon={selectedSection?.lockEdit ? Lock : Unlock}
+                                 label={selectedSection?.lockEdit ? "Locked" : "Unlocked"}
+                                 active={selectedSection?.lockEdit}
+                                 disabled={!selectedSection}
+                                 onClick={() => {
+                                   if (!selectedSectionId) return;
+                                   setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockEdit: !selectedSection?.lockEdit }) }));
+                                 }} />
+                    </RibbonGroup>
+
+                  </TabsContent>
+
+                  <TabsContent value="insert" className="flex flex-row items-stretch gap-1 m-0 focus-visible:outline-none">
+                    <RibbonGroup label="Sections">
+                      <RibbonBtn icon={Plus} label="Section" onClick={() => setData(p => ({
+                        ...p, sections: renumberSections([...p.sections, { id: `sec-${Date.now()}`, number: "", title: "New Section", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] }])
+                      }))} />
+                      <RibbonBtn icon={Plus} label="Sub" disabled={!selectedSection}
+                                 onClick={() => {
+                                   if (!selectedSectionId) return;
+                                   setData(p => ({ ...p, sections: renumberSections(addChildSection(p.sections, selectedSectionId)) }));
+                                   setExpandedIds(p => new Set([...p, selectedSectionId]));
+                                 }} />
+                    </RibbonGroup>
+
+                    <RibbonGroup label="Content">
+                      <RibbonBtn icon={PlusCircle} label="Blank" disabled={!selectedSection}
+                                 onClick={() => setShowBlankForm(true)} />
+                      <RibbonBtn icon={TableIcon} label="Table" disabled={!selectedSection}
+                                 onClick={() => {
+                                   if (!selectedSectionId) return;
+                                   const sec = findSection(data.sections, selectedSectionId);
+                                   if (sec) {
+                                     const newTable: TableData = { id: `t-${Date.now()}`, rows: 3, cols: 3, data: Array(3).fill(null).map(() => Array(3).fill("")) };
+                                     setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { tables: [...(sec.tables || []), newTable] }) }));
+                                   }
+                                 }} />
+                      <RibbonBtn icon={Minus} label="Rule" onClick={() => handleFormat("insertHorizontalRule")} />
+                    </RibbonGroup>
+
+                    <RibbonGroup label="File">
+                      <RibbonBtn icon={Save} label="Save" onClick={handleSave} />
+                      <RibbonBtn icon={Upload} label="Load" onClick={handleLoadJSON} />
+                      <RibbonBtn icon={Download} label="Export" onClick={handleExport} />
+                    </RibbonGroup>
+
+                  </TabsContent>
+
+                  <TabsContent value="layout" className="flex flex-row items-stretch gap-1 m-0 focus-visible:outline-none">
+                    <RibbonGroup label="Structure">
+                      <RibbonBtn icon={Trash2} label="Delete" danger disabled={!selectedSection || data.sections.length === 1}
+                                 onClick={() => {
+                                   if (!selectedSectionId || !confirm("Delete this section?")) return;
+                                   setData(p => ({ ...p, sections: renumberSections(deleteSection(p.sections, selectedSectionId)) }));
+                                   setSelectedSectionId(null);
+                                 }} />
+                      <RibbonBtn icon={selectedSection?.lockEdit ? Lock : Unlock}
+                                 label={selectedSection?.lockEdit ? "Locked" : "Unlocked"}
+                                 active={selectedSection?.lockEdit}
+                                 disabled={!selectedSection}
+                                 onClick={() => {
+                                   if (!selectedSectionId) return;
+                                   setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockEdit: !selectedSection?.lockEdit }) }));
+                                 }} />
+                    </RibbonGroup>
+
+                    <RibbonGroup label="Formatting">
+                      <RibbonBtn icon={Eraser} label="Clear" onClick={() => handleFormat("removeFormat")} />
+                    </RibbonGroup>
+                  </TabsContent>
+                </div>
+              </Tabs>
 
               {/* ── Insert Blank Form (shown below ribbon) ── */}
               {showBlankForm && (
-                <div className="bg-muted/50 border-b px-4 py-3 flex items-end gap-3 shrink-0">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Label *</label>
-                    <Input value={blankLabel} onChange={e => setBlankLabel(e.target.value)} placeholder="e.g. Project Name" className="h-8 w-40 text-sm" autoFocus />
+                  <div className="bg-muted/50 border-b px-4 py-3 flex items-end gap-3 shrink-0">
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase">Label *</label>
+                      <Input value={blankLabel} onChange={e => setBlankLabel(e.target.value)} placeholder="e.g. Project Name" className="h-8 w-40 text-sm" autoFocus />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase">Type</label>
+                      <select value={blankType} onChange={e => setBlankType(e.target.value as FieldType)}
+                              className="h-8 rounded border border-input bg-background px-2 text-sm">
+                        {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase">Placeholder</label>
+                      <Input value={blankPlaceholder} onChange={e => setBlankPlaceholder(e.target.value)} placeholder="Hint text..." className="h-8 w-32 text-sm" />
+                    </div>
+                    {blankType === "dropdown" && (
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-medium text-muted-foreground uppercase">Options</label>
+                          <Input value={blankOptions} onChange={e => setBlankOptions(e.target.value)} placeholder="Comma separated..." className="h-8 w-40 text-sm" />
+                        </div>
+                    )}
+                    <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                      <input type="checkbox" checked={blankRequired} onChange={e => setBlankRequired(e.target.checked)} className="rounded" />
+                      Required
+                    </label>
+                    <Button size="sm" className="h-8 gap-1" onClick={handleInsertBlank} disabled={!blankLabel.trim()}>
+                      <Check className="h-3 w-3" /> Insert
+                    </Button>
+                    <Button size="sm" variant="ghost" className="h-8" onClick={() => setShowBlankForm(false)}>
+                      <X className="h-3 w-3" />
+                    </Button>
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Type</label>
-                    <select value={blankType} onChange={e => setBlankType(e.target.value as FieldType)}
-                      className="h-8 rounded border border-input bg-background px-2 text-sm">
-                      {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Placeholder</label>
-                    <Input value={blankPlaceholder} onChange={e => setBlankPlaceholder(e.target.value)} placeholder="Hint text..." className="h-8 w-32 text-sm" />
-                  </div>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                    <input type="checkbox" checked={blankRequired} onChange={e => setBlankRequired(e.target.checked)} className="rounded" />
-                    Required
-                  </label>
-                  <Button size="sm" className="h-8 gap-1" onClick={handleInsertBlank} disabled={!blankLabel.trim()}>
-                    <Check className="h-3 w-3" /> Insert
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-8" onClick={() => setShowBlankForm(false)}>
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
               )}
 
               {/* ── Edit Blank Properties (shown below ribbon when editing a blank) ── */}
               {editingField && (
-                <div className="bg-blue-50/50 dark:bg-blue-950/20 border-b px-4 py-3 flex items-end gap-3 shrink-0">
-                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 mr-2">
-                    Editing blank:
-                    <span className="blank-chip" data-type={editingField.type} style={{ cursor: "default" }}>
+                  <div className="bg-blue-50/50 dark:bg-blue-950/20 border-b px-4 py-3 flex items-end gap-3 shrink-0">
+                    <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 mr-2">
+                      Editing blank:
+                      <span className="blank-chip" data-type={editingField.type} style={{ cursor: "default" }}>
                       {editingField.label} ({editingField.type})
                     </span>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase">Label</label>
+                      <Input value={editingField.label} onChange={e => handleUpdateField(editingField.id, { label: e.target.value })} className="h-8 w-32 text-sm" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase">Type</label>
+                      <select value={editingField.type} onChange={e => handleUpdateField(editingField.id, { type: e.target.value as FieldType })}
+                              className="h-8 rounded border border-input bg-background px-2 text-sm">
+                        {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                      </select>
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase">Placeholder</label>
+                      <Input value={editingField.placeholder || ""} onChange={e => handleUpdateField(editingField.id, { placeholder: e.target.value })} className="h-8 w-32 text-sm" />
+                    </div>
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase">Default</label>
+                      <Input value={editingField.defaultValue || ""} onChange={e => handleUpdateField(editingField.id, { defaultValue: e.target.value })} className="h-8 w-32 text-sm" />
+                    </div>
+                    {editingField.type === "dropdown" && (
+                        <div className="flex flex-col gap-1">
+                          <label className="text-[10px] font-medium text-muted-foreground uppercase">Options</label>
+                          <Input value={editingField.options?.join(", ") || ""} onChange={e => handleUpdateField(editingField.id, { options: e.target.value.split(",").map(s => s.trim()).filter(Boolean) })} placeholder="Comma separated..." className="h-8 w-40 text-sm" />
+                        </div>
+                    )}
+                    <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                      <input type="checkbox" checked={editingField.required ?? false} onChange={e => handleUpdateField(editingField.id, { required: e.target.checked })} className="rounded" />
+                      Required
+                    </label>
+                    <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditingFieldId(null)}>
+                      <X className="h-3 w-3" /> Close
+                    </Button>
                   </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Label</label>
-                    <Input value={editingField.label} onChange={e => handleUpdateField(editingField.id, { label: e.target.value })} className="h-8 w-32 text-sm" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Type</label>
-                    <select value={editingField.type} onChange={e => handleUpdateField(editingField.id, { type: e.target.value as FieldType })}
-                      className="h-8 rounded border border-input bg-background px-2 text-sm">
-                      {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Placeholder</label>
-                    <Input value={editingField.placeholder || ""} onChange={e => handleUpdateField(editingField.id, { placeholder: e.target.value })} className="h-8 w-32 text-sm" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Default</label>
-                    <Input value={editingField.defaultValue || ""} onChange={e => handleUpdateField(editingField.id, { defaultValue: e.target.value })} className="h-8 w-32 text-sm" />
-                  </div>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                    <input type="checkbox" checked={editingField.required ?? false} onChange={e => handleUpdateField(editingField.id, { required: e.target.checked })} className="rounded" />
-                    Required
-                  </label>
-                  <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditingFieldId(null)}>
-                    <X className="h-3 w-3" /> Close
-                  </Button>
-                </div>
               )}
 
               {/* ── Document pages ── */}
@@ -1076,7 +1405,7 @@ function SowEditPageInner() {
 
                         <p className="text-3xl font-semibold mt-6 select-none">FOR</p>
                         <EditableText value={data.coverPage.clientName} onChange={v => updateCover("clientName", v)} className="text-4xl font-bold mt-4" placeholder="Product Name" />
-                            
+
                         <div className="flex items-baseline justify-center gap-2 mt-10">
                           <span className="text-3xl font-semibold select-none">BUILDING</span>
                           <EditableText value={data.coverPage.building} onChange={v => updateCover("building", v)} className="text-3xl font-semibold" placeholder="#" />
@@ -1098,14 +1427,14 @@ function SowEditPageInner() {
                     <h2 className="font-bold text-lg mb-6 text-center">Table of Contents</h2>
                     <div className="space-y-0.5">
                       {tocData.entries.map((entry, i) => (
-                        <div key={i} className="flex justify-between items-baseline text-[11px]" style={{ paddingLeft: `${entry.depth * 16}px` }}>
-                          <div className="flex items-baseline gap-2 flex-1">
-                            <span className="font-mono text-gray-600 shrink-0" style={{ minWidth: "40px" }}>{entry.number}</span>
-                            <span>{entry.title}</span>
-                            <span className="flex-1 border-b border-dotted border-gray-400 mx-1 mb-0.5" />
+                          <div key={i} className="flex justify-between items-baseline text-[11px]" style={{ paddingLeft: `${entry.depth * 16}px` }}>
+                            <div className="flex items-baseline gap-2 flex-1">
+                              <span className="font-mono text-gray-600 shrink-0" style={{ minWidth: "40px" }}>{entry.number}</span>
+                              <span>{entry.title}</span>
+                              <span className="flex-1 border-b border-dotted border-gray-400 mx-1 mb-0.5" />
+                            </div>
+                            <span className="font-mono text-gray-600 shrink-0">{entry.page}</span>
                           </div>
-                          <span className="font-mono text-gray-600 shrink-0">{entry.page}</span>
-                        </div>
                       ))}
                     </div>
                   </DocumentPage>
@@ -1124,8 +1453,7 @@ function SowEditPageInner() {
             </div>
           </DndContext>
         </div>
-      </SidebarInset>
-    </SidebarProvider>
+      </div>
   );
 }
 
@@ -1135,18 +1463,22 @@ export default function SowEditPage() {
   const router = useRouter();
 
   //Prevent non-admins from using this page
-  useEffect(() => {
-    if (sessionData?.user.role !== "ADMIN"){
-      router.push("/");
-    }
-  }, [sessionData, router]);
+  // useEffect(() => {
+  //   if (sessionData && sessionData.user.role !== "ADMIN") {
+  //     router.push("/login");
+  //   }
+  // }, [sessionData, router]);
+
+  // Now you can do your conditional logic for rendering
+  // if (!sessionData) return <div>Loading...</div>;
+  // if (sessionData.user.role !== "ADMIN") return null;
 
 
   return (
-    <div>
-      <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading editor...</div>}>
-        <SowEditPageInner />
-      </Suspense>
-    </div>
+      <div>
+        <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading editor...</div>}>
+          <SowEditPageInner />
+        </Suspense>
+      </div>
   );
 }

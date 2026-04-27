@@ -49,6 +49,7 @@ export type TemplateField = {
  * - `children`: List of subsections associated with the document section block
  */
 export type SectionNode = {
+  locked: boolean;
   id: string;
   number: string;
   title: string;
@@ -60,6 +61,8 @@ export type SectionNode = {
   tables?: TableData[];
   children: SectionNode[];
 };
+
+
 
 /**
  * Represents one table attached to a section.
