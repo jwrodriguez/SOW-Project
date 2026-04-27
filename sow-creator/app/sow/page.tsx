@@ -2,11 +2,12 @@
 
 import React, { Suspense, useMemo, useState, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Save, Download, FileText, ChevronRight, ChevronDown, Lock, ChevronLeft, CheckCircle2, Circle, FileDown } from "lucide-react";
+import { Save, Download, FileText, ChevronRight, ChevronDown, Lock, ChevronLeft, CheckCircle2, Circle, FileDown, Plane } from "lucide-react";
 import type { TemplateData, SectionNode, TemplateField, HeaderFooterData } from "@/types/pageTypes";
+import { getGlobalTemplate } from "@/lib/db-pullTemp";
+import { set } from "better-auth";
 
 // ─── Default blank template ───────────────────────────────────────────────────
 // Used when no draft or template is passed via URL. Engineers should normally
@@ -610,28 +611,84 @@ function SowEngineerPageInner() {
   // Falls back to default blank template. When DB is live this should
   // load from a template ID in the URL instead.
   const initialData: TemplateData = useMemo(() => {
-    const draftParam = searchParams.get("draft");
-    if (draftParam) {
-      try {
-        return JSON.parse(atob(draftParam)) as TemplateData;
-      } catch {
-        // fall through to default
-      }
-    }
-    
-    // const saved = localStorage.getItem("current_draft");
-    // if (saved) {
-    //   try {
-    //     return JSON.parse(saved) as TemplateData;
-
-    //   } catch { /* use defaults */ }
-    // }
     return DEFAULT_TEMPLATE;
     
-  }, [searchParams]);
+  }, []);
 
   // Template structure - engineers cannot change this, only their content edits and field values
-  const [data, setData] = useState<TemplateData>(initialData);
+  const [data, setData] = useState<TemplateData>(initialData);// Navigator expand/collapse state
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(
+    new Set(initialData.sections.map(s => s.id))
+  );
+
+
+  
+  useEffect(() => {
+    const draftParam = searchParams.get("draft");
+
+    async function syncWithDb() {
+      try {
+        const dbData = await getGlobalTemplate();
+        
+        // Only update if we actually got a valid object back
+        if (dbData) {
+          setData(dbData as TemplateData);
+
+          if (draftParam) {
+            const parsedData = JSON.parse(atob(draftParam));
+            setData((prevData) => ({
+            ...prevData, // Copy all existing data
+            documentName: parsedData.documentName, // Override name
+            coverPage: { 
+              ...prevData.coverPage, // Keep other cover page fields (title, date, version, confidentiality)
+              clientName: parsedData.clientName,
+              building: parsedData.building,
+              location: parsedData.location,
+              preparedBy: parsedData.preparedBy,
+              department: parsedData.department,
+            },
+          }));}
+          
+          // Sync UI states that depend on the data structure
+          setExpandedIds(new Set((dbData as TemplateData).sections.map(s => s.id)));
+          // setEditedName((dbData as TemplateData).documentName);
+        }
+      } catch (error) {
+        // If DB fails, we do nothing; 'data' remains 'defaultData'
+        console.error("Database fetch failed, continuing with defaults:", error);
+      }
+    }
+
+    syncWithDb();
+  }, [searchParams]); // Run once on mount
+
+
+  // useEffect(() => {
+  // const draftParam = searchParams.get("draft");
+  // if (draftParam) {
+  //   try {
+  //     // Decode and parse the base64 JSON
+  //     const parsedData = JSON.parse(atob(draftParam));
+  //     console.log("Loaded draft data from URL:", parsedData);
+  //     if (parsedData) {
+  //       setData((prevData) => ({
+  //         ...prevData, // Copy all existing data
+  //         documentName: parsedData.documentName, // Override name
+  //         coverPage: { 
+  //           ...prevData.coverPage, // Keep other cover page fields (title, date, version, confidentiality)
+  //           clientName: parsedData.clientName,
+  //           building: parsedData.building,
+  //           location: parsedData.location,
+  //           preparedBy: parsedData.preparedBy,
+  //           department: parsedData.department,
+  //         },
+  //       }));
+  //       }
+  //     } catch (e) {
+  //       console.error("Failed to parse draft param:", e);
+  //     }
+  //   }
+  // }, [searchParams]); // Correctly triggers when URL changes
 
   // Field values - maps field ID to the string the engineer typed in.
   // Stored separately from the template so we can merge on save.
@@ -641,10 +698,7 @@ function SowEngineerPageInner() {
     return initial;
   });
 
-  // Navigator expand/collapse state
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(
-    new Set(initialData.sections.map(s => s.id))
-  );
+  
 
   // Active question index for the questionnaire bar.
   // When the engineer moves to a new question the document scrolls to that section.
@@ -826,12 +880,24 @@ function SowEngineerPageInner() {
 
   return (
     <SidebarProvider>
-      <AppSidebar />
       <SidebarInset className="flex flex-col h-screen overflow-hidden">
 
         {/* Header */}
         <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4 bg-background sticky top-0 z-10">
           <div className="flex items-center gap-2">
+            <a href="/">
+                <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                  <Plane className="size-4" />
+                </div>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold uppercase tracking-tighter">
+                    SoWizard
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground uppercase font-mono">
+                    Tinker AFB
+                  </span>
+                </div>
+              </a>
             <SidebarTrigger className="-ml-1" />
             <FileText className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold">{data.documentName}</span>
