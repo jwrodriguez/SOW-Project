@@ -11,9 +11,8 @@
  */
 "use client";
 
-import React, { Suspense, useMemo, useState} from "react";
+import React, { startTransition, Suspense, useEffect, useMemo, useState} from "react";
 import { useSearchParams } from "next/navigation";
-import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,6 +23,7 @@ import {
   Plus, Trash2, Download, Save, FileText, ChevronRight, ChevronDown,
   ListOrdered, Edit2, Table as TableIcon, Lock, Unlock, GripVertical,
   X, Check, PlusCircle, type LucideIcon,
+  Plane,
 } from "lucide-react";
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -37,6 +37,9 @@ import { CSS } from "@dnd-kit/utilities";
 // ============= TYPES =============
 // You can find Type Declarations and Descriptions used in .../types/pageTypes.ts
 import {FieldType, TemplateField, SectionNode, TableData, HeaderFooterData, TemplateData} from "@/types/pageTypes";
+import { saveGlobalTemplate } from "@/lib/db-upsert";
+import { get } from "http";
+import { getGlobalTemplate } from "@/lib/db-pullTemp";
 
 // Allowed field types listed here so both the insert form and edit form share the same options
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
@@ -387,7 +390,7 @@ export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fi
 
       {/* Section body — uses SectionContent for blank rendering */}
       <div className="ml-8" style={{ marginLeft: `${depth * 16 + 32}px` }}>
-        <SectionContent content={section.content} fields={fields} locked={section.locked}
+        <SectionContent content={section.content} fields={fields} locked={false /*section.locked*/}
           onClickBlank={onClickBlank} onDeleteBlank={onDeleteBlank}
           onChange={v => onUpdate({ content: v })} />
       </div>
@@ -552,94 +555,94 @@ function SowEditPageInner() {
   // If ?setup= param is present (base64 JSON from the /new form), decode and override defaults.
   const defaultData: TemplateData = useMemo(() => {
     const base: TemplateData = {
-      documentName: "Untitled Document",
-      fields: [],
+      documentName: "Untitled SOW",
+      // Each entry here is a blank the admin inserted via the blank form in the edit page.
+      // The id must exactly match the token embedded in the section content string below.
+      fields: [
+        { id: "field_product_name_001",       label: "Product Name",                    type: "text",      placeholder: "e.g. F-16 Avionics Suite",         required: true  },
+        { id: "field_contractor_tasks_002",    label: "Contractor Tasks",                type: "sentence",  placeholder: "e.g. install, maintain, and test",  required: true  },
+        { id: "field_contractor_service_003",  label: "Service Description",             type: "sentence",  placeholder: "e.g. provide 24/7 technical support",required: true  },
+        { id: "field_items_purchased_004",     label: "Items to be Purchased",           type: "text",      placeholder: "e.g. hydraulic actuators",          required: true  },
+        { id: "field_install_location_005",    label: "Installation Location",           type: "text",      placeholder: "e.g. Tinker AFB, Building 3001",    required: true  },
+        { id: "field_use_purpose_006",         label: "Purpose of Use",                  type: "sentence",  placeholder: "e.g. F-16 maintenance operations",  required: false },
+        { id: "field_delivery_location_007",   label: "Delivery Location",               type: "text",      placeholder: "e.g. Dock B, Building 3001",        required: false },
+        { id: "field_applicable_stds_008",     label: "Applicable Standards",            type: "paragraph", placeholder: "List any additional standards...",  required: false },
+        { id: "field_prohibited_mats_009",     label: "Prohibited Materials",            type: "paragraph", placeholder: "List any prohibited materials...",  required: false },
+        { id: "field_written_submittals_010",  label: "Written Submittals",              type: "paragraph", placeholder: "Describe required documentation...",required: false },
+        { id: "field_gfp_details_011",         label: "Government Furnished Property",   type: "paragraph", placeholder: "List any GFP items provided...",    required: false },
+      ],
       coverPage: {
-        title: "Statement of Work", projectNumber: "SOW-2026-001", clientName: "Product Name",
-        building: "3001", location: "Norman, Oklahoma", preparedBy: "Your Name",
-        department: "Department Name", date: new Date().toISOString().split("T")[0],
-        version: "1.0", confidentiality: "Confidential",
+        title: "Statement of Work",
+        projectNumber: "SOW-2026-001",
+        clientName: "",
+        building: "",
+        location: "",
+        preparedBy: "",
+        department: "",
+        date: new Date().toISOString().split("T")[0],
+        version: "1.0",
+        confidentiality: "Confidential",
       },
       headerFooter: {
-        headerLeft: "Statement of Work\n3 February 2025", headerCenter: "", headerRight: "",
-        footerLeft: "SOW-2026-001", footerCenter: "", footerRight: "Page {PAGE}",
-        showPageNumbers: true, pageNumberPosition: "footer-right",
+        headerLeft: "Statement of Work",
+        headerCenter: "",
+        headerRight: "",
+        footerLeft: "SOW-2026-001",
+        footerCenter: "",
+        footerRight: "Page {PAGE}",
+        showPageNumbers: true,
+        pageNumberPosition: "footer-right",
       },
       sections: [
-        { id: "sec-1", number: "1.0", title: "Scope of Work", content: "", locked: true, tables: [],
+        {
+          id: "sec-1", number: "1.0", title: "Scope of Work", content: "", locked: true, tables: [],
           children: [
-            { id: "sec-1-1", number: "1.1", title: "Scope", content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {YOUR PRODUCT}. The contractor should {do these things} and {provide this service}.", locked: false, tables: [], children: [] },
-            { id: "sec-1-2", number: "1.2", title: "Background", content: "The {items to be purchased} are intended to be used at {a location} for {a purpose}. {the items} shoud be delivered to {a location} ", locked: false, tables: [], children: [] },
-          ]
+            // Unlocked - engineer edits freely. Blanks here are still filled via the questionnaire.
+            {
+              id: "sec-1-1", number: "1.1", title: "Scope", locked: false, tables: [], children: [],
+              content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {{field_product_name_001}}. The contractor should {{field_contractor_tasks_002}} and {{field_contractor_service_003}}.",
+            },
+            {
+              id: "sec-1-2", number: "1.2", title: "Background", locked: false, tables: [], children: [],
+              content: "The {{field_items_purchased_004}} are intended to be used at {{field_install_location_005}} for {{field_use_purpose_006}}. The items should be delivered to {{field_delivery_location_007}}.",
+            },
+          ],
         },
-        { id: "sec-2", number: "2.0", title: "Applicable Standards", content: "Contractor, at a minimum, is required to comply with the current editions of the following requirements for design, construction, installation, and safety as applicable. The term “most recent edition” shall be understood to mean “most recently released edition as of date of issuance of contract.” ", locked: true, tables: [],
+        {
+          id: "sec-2", number: "2.0", title: "Applicable Standards", locked: true, tables: [],
+          content: "Contractor, at a minimum, is required to comply with the current editions of the following requirements for design, construction, installation, and safety as applicable.",
           children: [
-            { id: "sec-2-1", number: "2.1", title: "Government Standards", content: "The following documents form a part of this purchase description to the extent stipulated herein.", locked: true, tables: [], children: [] },
-            { id: "sec-2-2", number: "2.2", title: "Non-Government Standards", content: "The following documents form a part of this document to the extent stipulated herein. ", locked: true, tables: [], children: [] },
-            { id: "sec-2-3", number: "2.3", title: "Order of Precedence", content: "", locked: true, tables: [], children: [] },
-            { id: "sec-2-4", number: "2.4", title: "Applicable Standards", content: "", locked: true, tables: [], children: [] },
-            { id: "sec-2-5", number: "2.5", title: "Prohibited Materials", content: "", locked: true, tables: [], children: [] },
-            { id: "sec-2-6", number: "2.6", title: "Environmental Protection", content: "Under the operating, service, transportation and storage conditions described herein the machine shall not emit materials hazardous to the ecological system as prohibited by federal, state or local statutes in effect at the point of installation. ", locked: true, tables: [], children: [] },
-          ]
+            { id: "sec-2-1", number: "2.1", title: "Government Standards",    content: "The following documents form a part of this purchase description to the extent stipulated herein.",  locked: true, tables: [], children: [] },
+            { id: "sec-2-2", number: "2.2", title: "Non-Government Standards", content: "The following documents form a part of this document to the extent stipulated herein.",              locked: true, tables: [], children: [] },
+            { id: "sec-2-3", number: "2.3", title: "Order of Precedence",      content: "In the event of a conflict between the text of this specification and the references cited herein, the text of this specification takes precedence.", locked: true, tables: [], children: [] },
+            // Locked with blank - engineer fills via questionnaire bar or inline input
+            { id: "sec-2-4", number: "2.4", title: "Applicable Standards",    content: "{{field_applicable_stds_008}}",   locked: true, tables: [], children: [] },
+            { id: "sec-2-5", number: "2.5", title: "Prohibited Materials",    content: "{{field_prohibited_mats_009}}",    locked: true, tables: [], children: [] },
+            { id: "sec-2-6", number: "2.6", title: "Environmental Protection", content: "Under the operating, service, transportation and storage conditions described herein the machine shall not emit materials hazardous to the ecological system as prohibited by federal, state or local statutes in effect at the point of installation.", locked: true, tables: [], children: [] },
+          ],
         },
-        { id: "sec-3", number: "3.0", title: "Written Submittals", content: "", locked: true, tables: [], children: [] },
-        { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "", locked: true, tables: [], children: [] },
+        // Locked with blanks - lock states now match the admin edit page defaults
+        { id: "sec-3", number: "3.0", title: "Written Submittals",                       content: "{{field_written_submittals_010}}", locked: true, tables: [], children: [] },
+        { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "{{field_gfp_details_011}}",        locked: true, tables: [], children: [] },
       ],
     };
 
-
-    const setupParam = searchParams.get("setup");
-    if (setupParam) {
-      try {
-        const setup = JSON.parse(atob(setupParam));
-        if (setup.documentName) base.documentName = setup.documentName;
-        if (setup.title) base.coverPage.title = setup.title;
-        if (setup.projectNumber) { base.coverPage.projectNumber = setup.projectNumber; base.headerFooter.footerLeft = setup.projectNumber; }
-        if (setup.clientName) base.coverPage.clientName = setup.clientName;
-        if (setup.building) base.coverPage.building = setup.building;
-        if (setup.location) base.coverPage.location = setup.location;
-        if (setup.preparedBy) base.coverPage.preparedBy = setup.preparedBy;
-        if (setup.department) base.coverPage.department = setup.department;
-        if (setup.date) {
-          base.coverPage.date = setup.date;
-          const d = new Date(setup.date + "T00:00:00");
-          const formatted = d.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" });
-          base.headerFooter.headerLeft = `${setup.title || "Statement of Work"}\n${formatted}`;
-        }
-        if (setup.confidentiality) base.coverPage.confidentiality = setup.confidentiality;
-        if (setup.description) base.sections[0].content = setup.description;
-      } catch { /* use defaults */ }
-    }
-    const saved = localStorage.getItem("current_draft");
-    if (saved) {
-      try {
-        const setup = JSON.parse(saved);
-        
-        if (setup.documentName) base.documentName = setup.documentName;
-        if (setup.title) base.coverPage.title = setup.title;
-        if (setup.projectNumber) { base.coverPage.projectNumber = setup.projectNumber; base.headerFooter.footerLeft = setup.projectNumber; }
-        if (setup.clientName) base.coverPage.clientName = setup.clientName;
-        if (setup.building) base.coverPage.building = setup.building;
-        if (setup.location) base.coverPage.location = setup.location;
-        if (setup.preparedBy) base.coverPage.preparedBy = setup.preparedBy;
-        if (setup.department) base.coverPage.department = setup.department;
-        if (setup.date) {
-          base.coverPage.date = setup.date;
-          const d = new Date(setup.date + "T00:00:00");
-          const formatted = d.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" });
-          base.headerFooter.headerLeft = `${setup.title || "Statement of Work"}\n${formatted}`;
-        }
-        if (setup.confidentiality) base.coverPage.confidentiality = setup.confidentiality;
-        if (setup.description) base.sections[0].content = setup.description;
-
-        if (setup.sections) base.sections = setup.sections;
-
-      } catch { /* use defaults */ }
-
-    }
-
     return base;
   }, [searchParams]);
+
+  //update defaultData with db data if present
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const dbData = await getGlobalTemplate();
+        if (dbData){
+        setData(dbData as TemplateData);}
+      } catch (e) {
+        console.error("Failed to load template from IndexedDB:", e);
+      }
+    };
+    loadData();
+  }, []);
 
   const [data, setData] = useState<TemplateData>(defaultData); // Primary document state — all edits call setData with functional updates to avoid stale closures
   const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(defaultData.sections.map(s => s.id))); // Tracks which section IDs are expanded in the left navigator
@@ -675,39 +678,45 @@ function SowEditPageInner() {
   }
 
   // Save / Load / Export
-  // handleSave serializes state to JSON and triggers a browser file download — no server involved
+  // handleSave goes straight to DB
   function handleSave() {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.json`;
-    a.click(); URL.revokeObjectURL(url);
+    startTransition(async () => {
+      const result = await saveGlobalTemplate(data);
+      if (result.success) {
+        alert("The SOW template has been saved.");
+      }
+    });
+    // const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    // const url = URL.createObjectURL(blob);
+    // const a = document.createElement("a");
+    // a.href = url;
+    // a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.json`;
+    // a.click(); URL.revokeObjectURL(url);
   }
 
   // handleLoadJSON opens a file picker, reads the JSON file, and replaces the current document
-  function handleLoadJSON() {
-    const input = document.createElement("input");
-    input.type = "file"; input.accept = ".json";
-    input.onchange = (e: Event) => {
-      const file = (e.target as HTMLInputElement).files?.[0]; if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ev => {
-        try {
-          const loaded = JSON.parse(ev.target?.result as string);
-          setData(loaded); setEditedName(loaded.documentName || "Untitled Document");
-          setExpandedIds(new Set(loaded.sections.map((s: SectionNode) => s.id)));
-        } catch { alert("Invalid JSON file"); }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
-  }
+  // function handleLoadJSON() {
+  //   const input = document.createElement("input");
+  //   input.type = "file"; input.accept = ".json";
+  //   input.onchange = (e: Event) => {
+  //     const file = (e.target as HTMLInputElement).files?.[0]; if (!file) return;
+  //     const reader = new FileReader();
+  //     reader.onload = ev => {
+  //       try {
+  //         const loaded = JSON.parse(ev.target?.result as string);
+  //         setData(loaded); setEditedName(loaded.documentName || "Untitled Document");
+  //         setExpandedIds(new Set(loaded.sections.map((s: SectionNode) => s.id)));
+  //       } catch { alert("Invalid JSON file"); }
+  //     };
+  //     reader.readAsText(file);
+  //   };
+  //   input.click();
+  // }
 
   // handleExport is a placeholder — planned: Next.js API → sanitize → Flask → python-docx → .docx download
-  function handleExport() {
-    alert("Export to Word will generate a .docx file. Backend integration coming soon!");
-  }
+  // function handleExport() {
+  //   alert("Export to Word will generate a .docx file. Backend integration coming soon!");
+  // }
 
   // ── Insert Blank ──
   // Creates a new TemplateField, appends its {{fieldId}} token to the selected section's content,
@@ -850,11 +859,23 @@ function SowEditPageInner() {
   // ============= RENDER =============
   return (
     <SidebarProvider>
-      <AppSidebar />
       <SidebarInset className="flex flex-col h-screen overflow-hidden">
         {/* Slim header — just sidebar trigger + doc name */}
         <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4 bg-background sticky top-0 z-10">
           <div className="flex items-center gap-2">
+            <a href="/">
+                <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
+                  <Plane className="size-4" />
+                </div>
+                <div className="grid flex-1 text-left text-sm leading-tight">
+                  <span className="truncate font-semibold uppercase tracking-tighter">
+                    SoWizard
+                  </span>
+                  <span className="truncate text-xs text-muted-foreground uppercase font-mono">
+                    Tinker AFB
+                  </span>
+                </div>
+              </a>
             <SidebarTrigger className="-ml-1" />
             <FileText className="h-4 w-4 text-primary" />
             {isEditingName ? (
@@ -895,8 +916,8 @@ function SowEditPageInner() {
               <div className="editor-ribbon sticky top-0 z-30 px-3 py-1.5 flex items-center gap-1 shrink-0">
                 {/* File group */}
                 <RibbonBtn icon={Save} label="Save" onClick={handleSave} />
-                <RibbonBtn icon={Download} label="Load" onClick={handleLoadJSON} />
-                <RibbonBtn icon={Download} label="Export" onClick={handleExport} />
+                {/* <RibbonBtn icon={Download} label="Load" onClick={handleLoadJSON} />
+                <RibbonBtn icon={Download} label="Export" onClick={handleExport} /> */}
                 <div className="ribbon-divider" />
 
                 {/* Insert group */}
@@ -1078,11 +1099,14 @@ function SowEditPageInner() {
 // Suspense wrapper for useSearchParams()
 export default function SowEditPage() {
   const { data: sessionData } = useSession();
+  const router = useRouter();
 
   //Prevent non-admins from using this page
-  if (sessionData?.user.role !== "ADMIN"){
-    useRouter().push("/");
-  }
+  useEffect(() => {
+    if (sessionData?.user.role !== "ADMIN"){
+      router.push("/");
+    }
+  }, [sessionData, router]);
 
 
   return (

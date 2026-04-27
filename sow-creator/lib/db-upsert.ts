@@ -1,0 +1,36 @@
+"use server"
+
+import { db } from "@/db";
+import { TEMPLATE } from "@/db/schema";
+import { eq } from "drizzle-orm";
+import { revalidatePath } from "next/cache";
+
+// A fixed UUID to ensure we only ever edit the same single row
+const SINGLETON_ID = "00000000-0000-0000-0000-000000000001";
+
+export async function saveGlobalTemplate(data: any) {
+  try {
+    await db
+      .insert(TEMPLATE)
+      .values({
+        id: SINGLETON_ID,
+        name: data.documentName || "Global Template",
+        content: data, // Drizzle handles the JSON conversion
+        updatedAt: new Date(),
+      })
+      .onConflictDoUpdate({
+        target: TEMPLATE.id,
+        set: {
+          name: data.documentName,
+          content: data,
+          updatedAt: new Date(),
+        },
+      });
+
+    revalidatePath("/"); // Update the UI cache
+    return { success: true };
+  } catch (error) {
+    console.error("Failed to save template:", error);
+    return { success: false, error: "Database update failed" };
+  }
+}

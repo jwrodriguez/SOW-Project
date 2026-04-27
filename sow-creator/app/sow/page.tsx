@@ -2,11 +2,11 @@
 
 import React, { Suspense, useMemo, useState, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Save, Download, FileText, ChevronRight, ChevronDown, Lock, ChevronLeft, CheckCircle2, Circle } from "lucide-react";
+import { Save, Download, FileText, ChevronRight, ChevronDown, Lock, ChevronLeft, CheckCircle2, Circle, FileDown, Plane } from "lucide-react";
 import type { TemplateData, SectionNode, TemplateField, HeaderFooterData } from "@/types/pageTypes";
+import { getGlobalTemplate } from "@/lib/db-pullTemp";
+import { set } from "better-auth";
 
 // ─── Default blank template ───────────────────────────────────────────────────
 // Used when no draft or template is passed via URL. Engineers should normally
@@ -14,10 +14,10 @@ import type { TemplateData, SectionNode, TemplateField, HeaderFooterData } from 
 //
 // Two types of editable content exist in this template:
 //
-// 1. UNLOCKED SECTIONS (locked: false) — engineers click and type freely.
+// 1. UNLOCKED SECTIONS (locked: false) - engineers click and type freely.
 //    The text inside is just a hint showing what to write, not a real blank.
 //
-// 2. BLANKS in LOCKED SECTIONS — double curly {{field_id}} tokens match entries
+// 2. BLANKS in LOCKED SECTIONS - double curly {{field_id}} tokens match entries
 //    in data.fields. These appear in both the document as inline inputs AND in
 //    the questionnaire bar above. The admin creates these in the edit page using
 //    the blank insertion form. Filling one in updates both places simultaneously.
@@ -68,7 +68,7 @@ const DEFAULT_TEMPLATE: TemplateData = {
     {
       id: "sec-1", number: "1.0", title: "Scope of Work", content: "", locked: true, tables: [],
       children: [
-        // Unlocked — engineer edits freely. Blanks here are still filled via the questionnaire.
+        // Unlocked - engineer edits freely. Blanks here are still filled via the questionnaire.
         {
           id: "sec-1-1", number: "1.1", title: "Scope", locked: false, tables: [], children: [],
           content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {{field_product_name_001}}. The contractor should {{field_contractor_tasks_002}} and {{field_contractor_service_003}}.",
@@ -86,13 +86,13 @@ const DEFAULT_TEMPLATE: TemplateData = {
         { id: "sec-2-1", number: "2.1", title: "Government Standards",    content: "The following documents form a part of this purchase description to the extent stipulated herein.",  locked: true, tables: [], children: [] },
         { id: "sec-2-2", number: "2.2", title: "Non-Government Standards", content: "The following documents form a part of this document to the extent stipulated herein.",              locked: true, tables: [], children: [] },
         { id: "sec-2-3", number: "2.3", title: "Order of Precedence",      content: "In the event of a conflict between the text of this specification and the references cited herein, the text of this specification takes precedence.", locked: true, tables: [], children: [] },
-        // Locked with blank — engineer fills via questionnaire bar or inline input
+        // Locked with blank - engineer fills via questionnaire bar or inline input
         { id: "sec-2-4", number: "2.4", title: "Applicable Standards",    content: "{{field_applicable_stds_008}}",   locked: true, tables: [], children: [] },
         { id: "sec-2-5", number: "2.5", title: "Prohibited Materials",    content: "{{field_prohibited_mats_009}}",    locked: true, tables: [], children: [] },
         { id: "sec-2-6", number: "2.6", title: "Environmental Protection", content: "Under the operating, service, transportation and storage conditions described herein the machine shall not emit materials hazardous to the ecological system as prohibited by federal, state or local statutes in effect at the point of installation.", locked: true, tables: [], children: [] },
       ],
     },
-    // Locked with blanks — lock states now match the admin edit page defaults
+    // Locked with blanks - lock states now match the admin edit page defaults
     { id: "sec-3", number: "3.0", title: "Written Submittals",                       content: "{{field_written_submittals_010}}", locked: true, tables: [], children: [] },
     { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "{{field_gfp_details_011}}",        locked: true, tables: [], children: [] },
   ],
@@ -118,7 +118,7 @@ function generateTOCEntries(sections: SectionNode[], depth = 0, startPage = 3) {
 
 // ─── Inline blank input ───────────────────────────────────────────────────────
 // Renders a single blank field as an inline input inside section text.
-// Engineers type directly into these — no colored chip, just a clean input.
+// Engineers type directly into these - no colored chip, just a clean input.
 function BlankInput({ field, value, onChange }: {
   field: TemplateField;
   value: string;
@@ -190,13 +190,13 @@ function EngineerSectionContent({ content, fields, fieldValues, locked, onChange
     </div>
   );
 
-  // Locked sections show static text with fillable blank inputs — no text editing
+  // Locked sections show static text with fillable blank inputs - no text editing
   if (locked) {
     return <div className="px-1">{renderedContent}</div>;
   }
 
   // Unlocked sections are click-to-edit. While editing, show raw textarea.
-  // Blank chips are not shown in edit mode — engineer edits raw content string.
+  // Blank chips are not shown in edit mode - engineer edits raw content string.
   // When they click away, the rendered view with blanks comes back.
   return editing ? (
     <textarea
@@ -238,7 +238,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
 
   return (
     <div id={section.id} style={{ marginLeft: `${indent}px`, marginBottom: depth === 0 ? "2rem" : "1.25rem" }}>
-      {/* Section heading — read-only for engineers, lock icon shown when locked */}
+      {/* Section heading - read-only for engineers, lock icon shown when locked */}
       <div className="flex items-baseline gap-2 mb-1">
         {section.locked && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
         <span className="font-mono text-gray-400 shrink-0 text-sm select-none">{section.number}</span>
@@ -257,7 +257,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
         />
       </div>
 
-      {/* Tables — read-only for engineers */}
+      {/* Tables - read-only for engineers */}
       {section.tables && section.tables.length > 0 && (
         <div style={{ marginLeft: `${32}px` }} className="mt-3 space-y-4">
           {section.tables.map(table => (
@@ -267,7 +267,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
                   <tr key={ri}>
                     {row.map((cell, ci) => (
                       <td key={ci} className="border border-gray-300 p-1.5 text-sm">
-                        {cell || <span className="text-gray-300">—</span>}
+                        {cell || <span className="text-gray-300">-</span>}
                       </td>
                     ))}
                   </tr>
@@ -285,7 +285,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
 
 // ─── Document page wrapper ────────────────────────────────────────────────────
 // Renders an 8.5x11in white page with static header and footer.
-// Engineers cannot edit the header or footer — those are admin-controlled.
+// Engineers cannot edit the header or footer - those are admin-controlled.
 function DocumentPage({ hf, pageNumber, children }: {
   hf: HeaderFooterData;
   pageNumber: number;
@@ -296,7 +296,7 @@ function DocumentPage({ hf, pageNumber, children }: {
 
   return (
     <div className="bg-white shadow-lg mx-auto text-black" style={{ width: "8.5in", minHeight: "11in", display: "flex", flexDirection: "column" }}>
-      {/* Header — static, not editable by engineers */}
+      {/* Header - static, not editable by engineers */}
       <div style={{ padding: "0.5in 1in 0.1in 1in" }}>
         <div className="grid grid-cols-3 gap-1 text-sm text-gray-700">
           <div className="whitespace-pre-wrap">{hf.headerLeft}</div>
@@ -308,7 +308,7 @@ function DocumentPage({ hf, pageNumber, children }: {
       {/* Body */}
       <div style={{ padding: "0.1in 1in", flex: 1 }}>{children}</div>
 
-      {/* Footer — static, {PAGE} resolved */}
+      {/* Footer - static, {PAGE} resolved */}
       <div style={{ padding: "0.1in 1in 0.5in 1in" }}>
         <div className="grid grid-cols-3 gap-1 text-sm text-gray-700">
           <div className="whitespace-pre-wrap">{resolve(hf.footerLeft)}</div>
@@ -333,7 +333,7 @@ function updateSectionContent(sections: SectionNode[], id: string, content: stri
 
 // ─── Questionnaire helpers ────────────────────────────────────────────────────
 
-// Represents one question in the questionnaire bar — a blank field with
+// Represents one question in the questionnaire bar - a blank field with
 // the section context it belongs to so the bar can show where it lives.
 type QuestionItem = {
   field: TemplateField;
@@ -344,7 +344,7 @@ type QuestionItem = {
 
 // Walks the section tree in document order and builds a flat ordered list
 // of questions by finding every {{field_id}} token in section content strings.
-// Fields that appear multiple times are deduplicated — first occurrence wins.
+// Fields that appear multiple times are deduplicated - first occurrence wins.
 // This preserves the reading order of the document which is the natural
 // questionnaire order for the engineer.
 function buildQuestionList(sections: SectionNode[], fields: TemplateField[]): QuestionItem[] {
@@ -382,7 +382,7 @@ function buildQuestionList(sections: SectionNode[], fields: TemplateField[]): Qu
 // Sticky panel below the main header. Shows one question at a time with
 // prev/next navigation and a dropdown to jump to any question.
 // Dot indicators show answered/skipped/current status for every question at a glance.
-// The input here calls onChangeField — same handler as the inline BlankInputs —
+// The input here calls onChangeField - same handler as the inline BlankInputs -
 // so the document preview updates live as the engineer types.
 function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, onChangeIndex }: {
   questions: QuestionItem[];
@@ -442,10 +442,10 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
   return (
     <div className="shrink-0 border-b bg-background shadow-sm px-5 py-4 z-20 space-y-3">
 
-      {/* Row 1 — question number, section badge, title, progress summary */}
+      {/* Row 1 - question number, section badge, title, progress summary */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          {/* Dropdown to jump to any question — grouped by section */}
+          {/* Dropdown to jump to any question - grouped by section */}
           <select
             value={activeIndex}
             onChange={e => onChangeIndex(Number(e.target.value))}
@@ -486,7 +486,7 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
           </span>
         </div>
 
-        {/* Progress summary — single consolidated indicator */}
+        {/* Progress summary - single consolidated indicator */}
         <div className="flex items-center gap-2">
           {allDone ? (
             <span className="text-xs text-green-600 font-semibold flex items-center gap-1">
@@ -502,13 +502,13 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
         </div>
       </div>
 
-      {/* Row 2 — dot tracker showing status of every question */}
+      {/* Row 2 - dot tracker showing status of every question */}
       <div className="flex items-center gap-1 flex-wrap">
         {statuses.map((status, i) => (
           <button
             key={questions[i].field.id}
             onClick={() => onChangeIndex(i)}
-            title={`Q${i + 1}: ${questions[i].field.label} — ${status === "answered" ? "answered" : status === "active" ? "current" : "unanswered"}`}
+            title={`Q${i + 1}: ${questions[i].field.label} - ${status === "answered" ? "answered" : status === "active" ? "current" : "unanswered"}`}
             className={`h-2.5 rounded-full transition-all ${
               status === "active"
                 ? "w-6 bg-primary"
@@ -520,7 +520,7 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
         ))}
       </div>
 
-      {/* Row 3 — label, input, navigation */}
+      {/* Row 3 - label, input, navigation */}
       <div className="flex items-center gap-3">
         {/* Prev button */}
         <Button
@@ -570,7 +570,7 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
           )}
         </div>
 
-        {/* Jump to next skipped button — only shows when there are unanswered questions */}
+        {/* Jump to next skipped button - only shows when there are unanswered questions */}
         {nextSkipped !== null && (
           <Button
             size="sm"
@@ -610,30 +610,86 @@ function SowEngineerPageInner() {
   // Falls back to default blank template. When DB is live this should
   // load from a template ID in the URL instead.
   const initialData: TemplateData = useMemo(() => {
-    const draftParam = searchParams.get("draft");
-    if (draftParam) {
-      try {
-        return JSON.parse(atob(draftParam)) as TemplateData;
-      } catch {
-        // fall through to default
-      }
-    }
-    
-    // const saved = localStorage.getItem("current_draft");
-    // if (saved) {
-    //   try {
-    //     return JSON.parse(saved) as TemplateData;
-
-    //   } catch { /* use defaults */ }
-    // }
     return DEFAULT_TEMPLATE;
     
-  }, [searchParams]);
+  }, []);
 
-  // Template structure — engineers cannot change this, only their content edits and field values
-  const [data, setData] = useState<TemplateData>(initialData);
+  // Template structure - engineers cannot change this, only their content edits and field values
+  const [data, setData] = useState<TemplateData>(initialData);// Navigator expand/collapse state
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(
+    new Set(initialData.sections.map(s => s.id))
+  );
 
-  // Field values — maps field ID to the string the engineer typed in.
+
+  
+  useEffect(() => {
+    const draftParam = searchParams.get("draft");
+
+    async function syncWithDb() {
+      try {
+        const dbData = await getGlobalTemplate();
+        
+        // Only update if we actually got a valid object back
+        if (dbData) {
+          setData(dbData as TemplateData);
+
+          if (draftParam) {
+            const parsedData = JSON.parse(atob(draftParam));
+            setData((prevData) => ({
+            ...prevData, // Copy all existing data
+            documentName: parsedData.documentName, // Override name
+            coverPage: { 
+              ...prevData.coverPage, // Keep other cover page fields (title, date, version, confidentiality)
+              clientName: parsedData.clientName,
+              building: parsedData.building,
+              location: parsedData.location,
+              preparedBy: parsedData.preparedBy,
+              department: parsedData.department,
+            },
+          }));}
+          
+          // Sync UI states that depend on the data structure
+          setExpandedIds(new Set((dbData as TemplateData).sections.map(s => s.id)));
+          // setEditedName((dbData as TemplateData).documentName);
+        }
+      } catch (error) {
+        // If DB fails, we do nothing; 'data' remains 'defaultData'
+        console.error("Database fetch failed, continuing with defaults:", error);
+      }
+    }
+
+    syncWithDb();
+  }, [searchParams]); // Run once on mount
+
+
+  // useEffect(() => {
+  // const draftParam = searchParams.get("draft");
+  // if (draftParam) {
+  //   try {
+  //     // Decode and parse the base64 JSON
+  //     const parsedData = JSON.parse(atob(draftParam));
+  //     console.log("Loaded draft data from URL:", parsedData);
+  //     if (parsedData) {
+  //       setData((prevData) => ({
+  //         ...prevData, // Copy all existing data
+  //         documentName: parsedData.documentName, // Override name
+  //         coverPage: { 
+  //           ...prevData.coverPage, // Keep other cover page fields (title, date, version, confidentiality)
+  //           clientName: parsedData.clientName,
+  //           building: parsedData.building,
+  //           location: parsedData.location,
+  //           preparedBy: parsedData.preparedBy,
+  //           department: parsedData.department,
+  //         },
+  //       }));
+  //       }
+  //     } catch (e) {
+  //       console.error("Failed to parse draft param:", e);
+  //     }
+  //   }
+  // }, [searchParams]); // Correctly triggers when URL changes
+
+  // Field values - maps field ID to the string the engineer typed in.
   // Stored separately from the template so we can merge on save.
   const [fieldValues, setFieldValues] = useState<Record<string, string>>(() => {
     const initial: Record<string, string> = {};
@@ -641,10 +697,7 @@ function SowEngineerPageInner() {
     return initial;
   });
 
-  // Navigator expand/collapse state
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(
-    new Set(initialData.sections.map(s => s.id))
-  );
+  
 
   // Active question index for the questionnaire bar.
   // When the engineer moves to a new question the document scrolls to that section.
@@ -684,6 +737,7 @@ function SowEngineerPageInner() {
 
   // Saves a draft by merging field values back into the template fields
   // and downloading the result as a JSON file the engineer can reload later.
+  // This is a temporary testing tool - will be removed once export to Word is the primary output.
   function handleSave() {
     const merged: TemplateData = {
       ...data,
@@ -699,6 +753,49 @@ function SowEngineerPageInner() {
     a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}-draft-${new Date().toISOString().split("T")[0]}.json`;
     a.click();
     URL.revokeObjectURL(url);
+  }
+
+  // Exports the completed SOW as a Word document via the FastAPI docx service.
+  // Merges fieldValues into fields[].defaultValue before sending so the Python
+  // service receives a complete document with all engineer answers baked in.
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const merged: TemplateData = {
+        ...data,
+        fields: data.fields.map(f => ({
+          ...f,
+          defaultValue: fieldValues[f.id] ?? f.defaultValue,
+        })),
+      };
+
+      const response = await fetch("/api/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(merged),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        alert(`Export failed: ${err.error ?? "Unknown error"}`);
+        return;
+      }
+
+      // Trigger browser download of the returned .docx file
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("Export failed - make sure the document service is running.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   // Loads a previously saved draft JSON file
@@ -744,7 +841,7 @@ function SowEngineerPageInner() {
     ));
   }
 
-  // Renders the left navigator panel — click to scroll, expand/collapse
+  // Renders the left navigator panel - click to scroll, expand/collapse
   function renderNav(sections: SectionNode[], depth = 0): React.ReactNode {
     return sections.map(section => {
       const hasChildren = section.children.length > 0;
@@ -781,76 +878,95 @@ function SowEngineerPageInner() {
   const filledBlanks = data.fields.filter(f => (fieldValues[f.id] ?? f.defaultValue ?? "").trim() !== "").length;
 
   return (
-    <SidebarProvider>
-      <AppSidebar />
-      <SidebarInset className="flex flex-col h-screen overflow-hidden">
+    <div className="flex flex-col h-screen overflow-hidden">
 
-        {/* Header */}
-        <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4 bg-background sticky top-0 z-10">
-          <div className="flex items-center gap-2">
-            <SidebarTrigger className="-ml-1" />
-            <FileText className="h-4 w-4 text-primary" />
+      {/* Header */}
+      <header className="flex h-14 shrink-0 items-center justify-between gap-4 border-b px-4 bg-background sticky top-0 z-10">
+        <div className="flex items-center gap-3">
+          {/* Logo */}
+          <a href="/" className="flex items-center gap-2">
+            <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg shrink-0">
+              <Plane className="size-4" />
+            </div>
+            <div className="flex flex-col text-left leading-tight">
+              <span className="text-sm font-semibold uppercase tracking-tighter">SoWizard</span>
+              <span className="text-[10px] text-muted-foreground uppercase font-mono">Tinker AFB</span>
+            </div>
+          </a>
+          {/* Separator */}
+          <div className="h-6 w-px bg-border shrink-0" />
+          {/* Document name */}
+          <div className="flex items-center gap-1.5">
+            <FileText className="h-4 w-4 text-primary shrink-0" />
             <span className="text-sm font-semibold">{data.documentName}</span>
           </div>
-          <div className="flex items-center gap-3">
-            <Button variant="outline" size="sm" onClick={handleLoad}>
-              <Download className="h-4 w-4 mr-1" /> Load Draft
-            </Button>
-            <Button size="sm" onClick={handleSave}>
-              <Save className="h-4 w-4 mr-1" /> Save Draft
-            </Button>
+        </div>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" size="sm" onClick={handleLoad}>
+            <Download className="h-4 w-4 mr-1" /> Load Draft
+          </Button>
+          <Button variant="outline" size="sm" onClick={handleSave}>
+            <Save className="h-4 w-4 mr-1" /> Save Draft
+          </Button>
+          <Button size="sm" onClick={handleExport} disabled={exporting}>
+            <FileDown className="h-4 w-4 mr-1" />
+            {exporting ? "Exporting..." : "Export Word"}
+          </Button>
+        </div>
+      </header>
+
+      {/* Body */}
+      <div className="flex flex-1 overflow-hidden">
+
+        {/* Left: section navigator */}
+        <div className="w-60 border-r shrink-0 flex flex-col overflow-hidden">
+          <div className="px-3 py-2 border-b flex items-center gap-2 shrink-0 bg-background">
+            <span className="text-sm font-semibold">Sections</span>
           </div>
-        </header>
-
-        {/* Questionnaire bar — sits below the main header, above the document */}
-        {questions.length > 0 && (
-          <QuestionnaireBar
-            questions={questions}
-            activeIndex={activeQuestionIndex}
-            fieldValues={fieldValues}
-            onChangeField={handleChangeField}
-            onChangeIndex={handleChangeQuestionIndex}
-          />
-        )}
-
-        {/* Body */}
-        <div className="flex flex-1 overflow-hidden">
-
-          {/* Left: section navigator */}
-          <div className="w-60 border-r shrink-0 flex flex-col overflow-hidden">
-            <div className="px-3 py-2 border-b flex items-center gap-2 shrink-0 bg-background">
-              <span className="text-sm font-semibold">Sections</span>
-            </div>
-            <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
-              {data.sections.length === 0 ? (
-                <p className="text-xs text-muted-foreground px-2 py-2">No sections loaded.</p>
-              ) : (
-                renderNav(data.sections)
-              )}
-            </div>
+          <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
+            {data.sections.length === 0 ? (
+              <p className="text-xs text-muted-foreground px-2 py-2">No sections loaded.</p>
+            ) : (
+              renderNav(data.sections)
+            )}
           </div>
+        </div>
 
-          {/* Right: document pages */}
+        {/* Right: questionnaire bar + document pages */}
+        <div className="flex-1 flex flex-col overflow-hidden min-w-0">
+
+          {/* Questionnaire bar */}
+          {questions.length > 0 && (
+            <QuestionnaireBar
+              questions={questions}
+              activeIndex={activeQuestionIndex}
+              fieldValues={fieldValues}
+              onChangeField={handleChangeField}
+              onChangeIndex={handleChangeQuestionIndex}
+            />
+          )}
+
+          {/* Document pages */}
           <div className="flex-1 overflow-y-auto bg-gray-200 p-8">
             <div className="space-y-8">
 
-              {/* Cover page — read-only for engineers */}
+              {/* Cover page */}
               <div className="bg-white shadow-lg mx-auto relative text-black" style={{ width: "8.5in", height: "11in" }}>
                 <div className="absolute inset-8 border-4 border-black pointer-events-none" />
                 <div className="absolute inset-8 flex items-center justify-center">
                   <div className="text-center w-full px-12">
                     <p className="text-4xl font-bold">{data.coverPage.title}</p>
                     <p className="text-3xl font-semibold mt-6">FOR</p>
-                    <p className="text-4xl font-bold mt-4">{data.coverPage.clientName || "—"}</p>
+                    <p className="text-4xl font-bold mt-4">{data.coverPage.clientName || "-"}</p>
                     <div className="flex items-baseline justify-center gap-2 mt-4">
                       <span className="text-3xl font-semibold">BUILDING</span>
-                      <span className="text-3xl font-semibold">{data.coverPage.building || "—"}</span>
+                      <span className="text-3xl font-semibold">{data.coverPage.building || "-"}</span>
                     </div>
                     <div className="mt-16 space-y-3">
-                      <p className="text-xl">{data.coverPage.location || "—"}</p>
+                      <p className="text-xl">{data.coverPage.location || "-"}</p>
                       <p className="text-lg font-semibold mt-4">Prepared by</p>
-                      <p className="text-xl">{data.coverPage.preparedBy || "—"}</p>
-                      <p className="text-xl">{data.coverPage.department || "—"}</p>
+                      <p className="text-xl">{data.coverPage.preparedBy || "-"}</p>
+                      <p className="text-xl">{data.coverPage.department || "-"}</p>
                       <p className="text-xl mt-2">{data.coverPage.date}</p>
                     </div>
                   </div>
@@ -889,8 +1005,8 @@ function SowEngineerPageInner() {
             </div>
           </div>
         </div>
-      </SidebarInset>
-    </SidebarProvider>
+      </div>
+    </div>
   );
 }
 
