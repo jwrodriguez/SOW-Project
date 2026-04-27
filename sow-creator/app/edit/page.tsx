@@ -14,13 +14,11 @@
 import React, { Suspense, useMemo, useState, useCallback, useRef, useEffect } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
 import { useSession } from "@/lib/auth-client";
-import { AppSidebar } from "@/components/app-sidebar";
-import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { ProfileMenu } from "@/components/profile-menu";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Toggle } from "@/components/ui/toggle";
-import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 import {
@@ -54,7 +52,8 @@ type TemplateField = {
 };
 type SectionNode = {
   id: string; number: string; title: string; content: string;
-  locked: boolean; tables?: TableData[]; children: SectionNode[];
+  lockEdit: boolean; lockDelete: boolean; lockAddTable: boolean; lockAddSections: boolean;
+  tables?: TableData[]; children: SectionNode[];
 };
 type TableData = { id: string; rows: number; cols: number; data: string[][] };
 type CoverPageData = {
@@ -1108,14 +1107,13 @@ function SowEditPageInner() {
   const editingField = editingFieldId ? data.fields.find(f => f.id === editingFieldId) : null;
 
   const handleReturnToNewForm = () => {
-    router.push("/login");
+    router.push("/");
   };
   
 
   // ============= RENDER =============
   return (
-    <SidebarProvider>
-      <SidebarInset className="flex flex-col h-screen overflow-hidden">
+    <div className="flex flex-col h-screen overflow-hidden">
         {/* Slim header — just sidebar trigger + doc name */}
         <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4 bg-background sticky top-0 z-10">
           <div className="flex items-center gap-2">
@@ -1124,8 +1122,11 @@ function SowEditPageInner() {
             </button>
             
           </div>
-          <div className="text-xs text-muted-foreground">
-            {data.fields.length} blank{data.fields.length !== 1 ? "s" : ""} · {data.sections.length} section{data.sections.length !== 1 ? "s" : ""}
+          <div className="flex items-center gap-3">
+            <div className="text-xs text-muted-foreground">
+              {data.fields.length} blank{data.fields.length !== 1 ? "s" : ""} · {data.sections.length} section{data.sections.length !== 1 ? "s" : ""}
+            </div>
+            <ProfileMenu />
           </div>
         </header>
 
@@ -1229,13 +1230,13 @@ function SowEditPageInner() {
                       </RibbonGroup>
 
                       <RibbonGroup label="Section">
-                        <RibbonBtn icon={selectedSection?.locked ? Lock : Unlock}
-                          label={selectedSection?.locked ? "Locked" : "Unlocked"}
-                          active={selectedSection?.locked}
+                        <RibbonBtn icon={selectedSection?.lockEdit ? Lock : Unlock}
+                          label={selectedSection?.lockEdit ? "Locked" : "Unlocked"}
+                          active={selectedSection?.lockEdit}
                           disabled={!selectedSection}
                           onClick={() => {
                             if (!selectedSectionId) return;
-                            setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { locked: !selectedSection?.locked }) }));
+                            setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockEdit: !selectedSection?.lockEdit }) }));
                           }} />
                       </RibbonGroup>
 
@@ -1244,7 +1245,7 @@ function SowEditPageInner() {
                   <TabsContent value="insert" className="flex flex-row items-stretch gap-1 m-0 focus-visible:outline-none">
                       <RibbonGroup label="Sections">
                         <RibbonBtn icon={Plus} label="Section" onClick={() => setData(p => ({
-                          ...p, sections: renumberSections([...p.sections, { id: `sec-${Date.now()}`, number: "", title: "New Section", content: "", locked: true, tables: [], children: [] }])
+                          ...p, sections: renumberSections([...p.sections, { id: `sec-${Date.now()}`, number: "", title: "New Section", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] }])
                         }))} />
                         <RibbonBtn icon={Plus} label="Sub" disabled={!selectedSection}
                           onClick={() => {
@@ -1285,13 +1286,13 @@ function SowEditPageInner() {
                             setData(p => ({ ...p, sections: renumberSections(deleteSection(p.sections, selectedSectionId)) }));
                             setSelectedSectionId(null);
                           }} />
-                        <RibbonBtn icon={selectedSection?.locked ? Lock : Unlock}
-                          label={selectedSection?.locked ? "Locked" : "Unlocked"}
-                          active={selectedSection?.locked}
+                        <RibbonBtn icon={selectedSection?.lockEdit ? Lock : Unlock}
+                          label={selectedSection?.lockEdit ? "Locked" : "Unlocked"}
+                          active={selectedSection?.lockEdit}
                           disabled={!selectedSection}
                           onClick={() => {
                             if (!selectedSectionId) return;
-                            setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { locked: !selectedSection?.locked }) }));
+                            setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockEdit: !selectedSection?.lockEdit }) }));
                           }} />
                       </RibbonGroup>
 
@@ -1443,8 +1444,7 @@ function SowEditPageInner() {
             </div>
           </DndContext>
         </div>
-      </SidebarInset>
-    </SidebarProvider>
+    </div>
   );
 }
 
