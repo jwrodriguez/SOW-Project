@@ -1,3 +1,14 @@
+/**
+ * SOW TEMPLATE EDITOR. Full WYSIWYG-style editor.
+ *
+ * Layout: sidebar section nav | ribbon toolbar | document canvas
+ *
+ * Key concepts:
+ *   - SectionNode tree: recursive nested sections with numbering.
+ *   - Blanks: {{field_id}} tokens in content, rendered as colored chips.
+ *   - DnD: @dnd-kit for reordering sections in both nav and document.
+ *   - Suspense wrapper at bottom, required by Next.js for useSearchParams().
+ */
 "use client";
 
 import React, { Suspense, useMemo, useState, useRef, useEffect } from "react";
@@ -98,22 +109,48 @@ const DEFAULT_TEMPLATE: TemplateData = {
   ],
 };
 
-// ─── TOC generator ───────────────────────────────────────────────────────────
-// Builds a flat list of TOC entries from the section tree for Page 2.
-// Page numbers are estimates based on section count, not actual rendered height.
-function generateTOCEntries(sections: SectionNode[], depth = 0, startPage = 3) {
-  const entries: Array<{ number: string; title: string; page: number; depth: number }> = [];
-  let page = startPage;
-  for (const s of sections) {
-    entries.push({ number: s.number, title: s.title, page, depth });
-    page++;
-    if (s.children.length > 0) {
-      const r = generateTOCEntries(s.children, depth + 1, page);
-      entries.push(...r.entries);
-      page = r.nextPage;
-    }
-  }
-  return { entries, nextPage: page };
+import {
+  Plus, Trash2, Download, Save, FileText, ChevronRight, ChevronDown,
+  ListOrdered, Edit2, Table as TableIcon, Lock, Unlock, GripVertical,
+  X, Check, PlusCircle, type LucideIcon,
+} from "lucide-react";
+import {
+  DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  SortableContext, useSortable, verticalListSortingStrategy, arrayMove,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+
+// ============= TYPES =============
+// You can find Type Declarations and Descriptions used in .../types/pageTypes.ts
+import {FieldType, TemplateField, SectionNode, TableData, HeaderFooterData, TemplateData} from "@/types/pageTypes";
+
+// Allowed field types listed here so both the insert form and edit form share the same options
+const FIELD_TYPES: { value: FieldType; label: string }[] = [
+  { value: "text", label: "Text" }, { value: "number", label: "Number" },
+  { value: "word", label: "Word" }, { value: "sentence", label: "Sentence" },
+  { value: "paragraph", label: "Paragraph" }, { value: "list", label: "List" },
+  { value: "date", label: "Date" },
+];
+
+// ============= RIBBON BUTTON =============
+// Reusable button for the editing ribbon toolbar.
+// Supports disabled, active (highlighted), and danger (red) visual states.
+function RibbonBtn({ icon: Icon, label, onClick, disabled, active, danger }: {
+  icon: LucideIcon; label: string; onClick?: () => void; disabled?: boolean; active?: boolean; danger?: boolean;
+}) {
+  return (
+    <button onClick={onClick} disabled={disabled} title={label}
+      className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded text-[10px] transition-colors
+        ${disabled ? "opacity-30 cursor-not-allowed" : "hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer"}
+        ${active ? "bg-primary/10 text-primary" : ""}
+        ${danger ? "text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" : ""}`}>
+      <Icon className="h-4 w-4" />
+      <span className="leading-none">{label}</span>
+    </button>
+  );
 }
 
 // ─── Inline blank input ───────────────────────────────────────────────────────
@@ -123,36 +160,125 @@ function BlankInput({ field, value, onChange }: {
   field: TemplateField;
   value: string;
   onChange: (v: string) => void;
+  className?: string;
+  placeholder?: string;
+  disabled?: boolean;
 }) {
-  return (
-    <input
-      type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
-      value={value}
-      onChange={e => onChange(e.target.value)}
-      placeholder={field.placeholder || field.label}
-      title={field.label}
-      className="inline-block border-b border-primary/60 bg-primary/5 text-primary rounded px-1 py-0.5 text-sm min-w-[80px] max-w-[240px] outline-none focus:border-primary focus:bg-primary/10 transition-colors"
-      style={{ width: `${Math.max(80, (value.length || field.label.length) * 8)}px` }}
-    />
+  const [editing, setEditing] = useState(false);
+  if (disabled) return (
+    <div className={`px-1 min-h-[1.2em] ${className}`}>
+      {value || <span className="text-gray-400 italic text-sm font-normal">{placeholder}</span>}
+    </div>
+  );
+  return editing ? (
+    <input autoFocus type="text" value={value} onChange={e => onChange(e.target.value)}
+      onBlur={() => setEditing(false)} onKeyDown={e => e.key === "Enter" && setEditing(false)}
+      className={`bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full ${className}`} />
+  ) : (
+    <div onClick={() => setEditing(true)}
+      className={`cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 min-h-[1.2em] ${className}`}>
+      {value || <span className="text-gray-400 italic text-sm font-normal">{placeholder}</span>}
+    </div>
   );
 }
 
-// ─── Section content renderer ─────────────────────────────────────────────────
-// Parses section content for {{field_id}} tokens. Locked sections render
-// tokens as fillable BlankInputs but cannot edit surrounding text.
-// Unlocked sections are fully editable text areas, with blanks still inline.
-function EngineerSectionContent({ content, fields, fieldValues, locked, onChangeContent, onChangeField }: {
-  content: string;
-  fields: TemplateField[];
-  fieldValues: Record<string, string>;
-  locked: boolean;
-  onChangeContent: (v: string) => void;
-  onChangeField: (fieldId: string, value: string) => void;
+/**
+ * Multi-line click-to-edit field. Same disabled/enabled pattern as EditableText but uses a <textarea>. Row height auto-adjusts based on newline count in the content.
+ * @param value The text content to display/edit
+ * @param onChange Callback when text changes, recieves updated string value 
+ * @param className Optional additional class names for styling
+ * @param placeholder Placeholder text when value is empty
+ * @param disabled Boolean value determining whether the section is locked or open for editing 
+ *
+ * @returns A JSX element that displays text and allows inline editing on click
+ */
+
+export function EditableArea({ value, onChange, className = "", placeholder = "Click to add content...", disabled }: {
+  value: string;
+  onChange: (v: string) => void;
+  className?: string;
+  placeholder?: string;
+  disabled?: boolean;
 }) {
   const [editing, setEditing] = useState(false);
+  if (disabled) return (
+    <div className={`px-1 whitespace-pre-wrap min-h-[1.2em] ${className}`}>
+      {value || <span className="text-gray-400 italic text-sm font-normal">{placeholder}</span>}
+    </div>
+  );
+  return editing ? (
+    <textarea autoFocus value={value} onChange={e => onChange(e.target.value)}
+      onBlur={() => setEditing(false)} rows={Math.max(3, (value.match(/\n/g) || []).length + 2)}
+      className={`bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full resize-none ${className}`} />
+  ) : (
+    <div onClick={() => setEditing(true)}
+      className={`cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 whitespace-pre-wrap min-h-[1.2em] ${className}`}>
+      {value || <span className="text-gray-400 italic text-sm font-normal">{placeholder}</span>}
+    </div>
+  );
+}
+/**
+ * Editable footer zone component — similar to EditableArea but supports {PAGE} token that renders the current page number. This helps users understand how to include page numbers in their footer.
+ * @param value The text content to display/edit
+ * @param onChange Callback when text changes, recieves updated string value
+ * @param pageNumber page number input to replace {PAGE} token with in display mode
+ * @param className Optional additional class names for styling
+ * @param placeholder Placeholder text when value is empty
+ * 
+ * @returns A JSX element for editing footer text with support for dynamic page numbers via the {PAGE} token. Displays the resolved page number in display mode and shows the {PAGE} token in edit mode to clarify usage.
+ */
+export function EditableFooterZone({ value, onChange, pageNumber, className = "", placeholder = "Click to add footer content..." }: {
+  value: string;
+  onChange: (v: string) => void;
+  pageNumber: number;
+  className?: string;
+  placeholder?: string;
+}) {
+  const [editing, setEditing] = useState(false);
+  return editing ? (
+    <textarea autoFocus value={value} onChange={e => onChange(e.target.value)}
+      onBlur={() => setEditing(false)} rows={Math.max(1, (value.match(/\n/g) || []).length + 1)}
+      className={`bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full resize-none text-sm ${className}`} />
+  ) : (
+    <div onClick={() => setEditing(true)}
+      className={`cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 whitespace-pre-wrap min-h-[1.2em] text-sm ${className}`}>
+      {value ? value.replace("{PAGE}", String(pageNumber))
+        : <span className="text-gray-400 italic text-sm">{placeholder}</span>}
+    </div>
+  );
+}
+
+// ============= BLANK CHIP =============
+// Renders a fillable blank as a colored inline pill inside section content.
+// Color is driven by the data-type attribute and CSS in globals.css (.blank-chip styles).
+// Clicking opens the blank's property editor in the ribbon. X removes it.
+function BlankChip({ field, onClick, onDelete }: {
+  field: TemplateField; onClick: () => void; onDelete: () => void;
+}) {
+  return (
+    <span className="blank-chip" data-type={field.type} onClick={onClick}>
+      <span>{field.label}</span>
+      <span className="opacity-60 text-[10px]">({field.type})</span>
+      <button onClick={e => { e.stopPropagation(); onDelete(); }}
+        className="ml-0.5 opacity-40 hover:opacity-100 transition-opacity" title="Remove blank">
+        <X className="h-3 w-3" />
+      </button>
+    </span>
+  );
+}
+
+// ============= CONTENT RENDERER (parses {{field_id}} blanks) =============
+// Parses the section content string for {{field_id}} tokens and renders them as BlankChips.
+// Plain text between tokens renders as normal spans.
+// When unlocked: click-to-edit textarea. When locked: static text with interactive blank chips.
+function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, onChange }: {
+  content: string; fields: TemplateField[]; locked: boolean;
+  onClickBlank: (fieldId: string) => void; onDeleteBlank: (fieldId: string) => void;
+  onChange: (v: string) => void;
+}) {
   const fieldMap = useMemo(() => new Map(fields.map(f => [f.id, f])), [fields]);
 
-  // Parse content string into text and {{field_id}} segments
+  // Parse content into segments: text and {{field_id}} tokens
   const segments = useMemo(() => {
     const parts: Array<{ type: "text"; value: string } | { type: "blank"; fieldId: string }> = [];
     const regex = /\{\{([^}]+)\}\}/g;
@@ -168,27 +294,41 @@ function EngineerSectionContent({ content, fields, fieldValues, locked, onChange
     return parts;
   }, [content]);
 
-  // Renders the content with blank inputs inline
-  const renderedContent = (
-    <div className="whitespace-pre-wrap text-sm leading-relaxed">
+  const [editing, setEditing] = useState(false);
+
+  // If unlocked, show raw editable content
+  if (!locked) {
+    return editing ? (
+      <textarea autoFocus value={content} onChange={e => onChange(e.target.value)}
+        onBlur={() => setEditing(false)} rows={Math.max(3, (content.match(/\n/g) || []).length + 2)}
+        className="bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full resize-none text-sm leading-relaxed" />
+    ) : (
+      <div onClick={() => setEditing(true)}
+        className="cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 whitespace-pre-wrap min-h-[1.2em] text-sm leading-relaxed">
+        {segments.map((seg, i) => {
+          if (seg.type === "text") return <span key={i}>{seg.value}</span>;
+          const field = fieldMap.get(seg.fieldId);
+          if (!field) return <span key={i} className="text-red-400">{`{{${seg.fieldId}}}`}</span>;
+          return <BlankChip key={i} field={field} onClick={() => onClickBlank(field.id)} onDelete={() => onDeleteBlank(field.id)} />;
+        })}
+        {!content && <span className="text-gray-400 italic text-sm font-normal">Click to add content...</span>}
+      </div>
+    );
+  }
+
+  // Locked: render static text with blank chips
+  return (
+    <div className="whitespace-pre-wrap min-h-[1.2em] text-sm leading-relaxed px-1">
       {segments.map((seg, i) => {
         if (seg.type === "text") return <span key={i}>{seg.value}</span>;
         const field = fieldMap.get(seg.fieldId);
-        if (!field) return <span key={i} className="text-red-400 text-xs">[unknown field]</span>;
-        return (
-          <BlankInput
-            key={i}
-            field={field}
-            value={fieldValues[seg.fieldId] ?? field.defaultValue ?? ""}
-            onChange={v => onChangeField(seg.fieldId, v)}
-          />
-        );
+        if (!field) return <span key={i} className="text-red-400">{`{{${seg.fieldId}}}`}</span>;
+        return <BlankChip key={i} field={field} onClick={() => onClickBlank(field.id)} onDelete={() => onDeleteBlank(field.id)} />;
       })}
-      {!content && (
-        <span className="text-gray-400 italic text-sm">No content in this section.</span>
-      )}
+      {!content && <span className="text-gray-400 italic text-sm font-normal">No content — insert blanks or unlock to edit.</span>}
     </div>
   );
+}
 
   // Locked sections show static text with fillable blank inputs - no text editing
   if (locked) {
@@ -220,21 +360,50 @@ function EngineerSectionContent({ content, fields, fieldValues, locked, onChange
   );
 }
 
-// ─── Engineer section block ───────────────────────────────────────────────────
-// Renders one section for the engineer. No hover toolbars, no add/delete/reorder.
-// Locked sections show a lock icon and are not editable (except their blanks).
-// Heading size scales with depth like the admin editor.
-function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeContent, onChangeField, children }: {
-  section: SectionNode;
-  depth: number;
+// ============= SORTABLE SECTION BLOCK =============
+// Renders one section on the document page with drag-and-drop reordering via @dnd-kit.
+// useSortable provides the ref, drag listeners, and transform/transition for the drag animation.
+// isSelected adds a highlight ring. locked controls whether content is editable.
+// Hover toolbar exposes lock/unlock, add sub, add sibling, add table, and delete.
+/**
+ * @param section Section segment to be rendered into the document
+ * @param depth Numerical value indicating placement of section in the document
+ * @param isOnlyTop Boolean value indicating whether a section block resides at the topmost layer of the document
+ * @param onUpdate Convert content of section to be editable
+ * @param onAddChild Add a subsection to the section block in the document
+ * @param onAddSibling Add a section block of the same depth to the document
+ * @param onDelete Deletion function removing the section block from the document
+ * @param onAddTable Setter function adding a table object to section of the document. This is done with a (row, column) input
+ * @param onDeleteTable Deletion function removing a table object from section of the document
+ * @param onUpdateCell Setter function updating a cell value of a given table for a section block in the document
+ * @param children Existing subsections and subtables of a particular section block in the document are fed into this parameter 
+ * @returns A JSX Section Block Component
+ */
+export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fields,
+  onSelect, onUpdate, onAddChild, onAddSibling, onDelete,
+  onAddTable, onDeleteTable, onUpdateCell, onClickBlank, onDeleteBlank, children }: {
+  section: SectionNode; depth: number; isOnlyTop: boolean; isSelected: boolean;
   fields: TemplateField[];
-  fieldValues: Record<string, string>;
-  onChangeContent: (sectionId: string, value: string) => void;
-  onChangeField: (fieldId: string, value: string) => void;
+  onSelect: () => void;
+  onUpdate: (u: Partial<SectionNode>) => void;
+  onAddChild: () => void; onAddSibling: () => void; onDelete: () => void;
+  onAddTable: (r: number, c: number) => void;
+  onDeleteTable: (id: string) => void;
+  onUpdateCell: (tid: string, r: number, c: number, v: string) => void;
+  onClickBlank: (fieldId: string) => void; onDeleteBlank: (fieldId: string) => void;
   children?: React.ReactNode;
 }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+
+  const [hovered, setHovered] = useState(false);
+  const [showTableForm, setShowTableForm] = useState(false);
+  const [tr, setTr] = useState(3);
+  const [tc, setTc] = useState(3);
+  // Heading size scales with depth: 0 = H1, 1 = H2, 2+ = H3
   const headingClass = depth === 0 ? "text-2xl font-bold" : depth === 1 ? "text-xl font-semibold" : "text-lg font-medium";
-  const indent = depth * 16;
+
+  const locked = section.lockEdit || section.lockDelete || section.lockAddTable || section.lockAddSections;
 
   return (
     <div id={section.id} style={{ marginLeft: `${indent}px`, marginBottom: depth === 0 ? "2rem" : "1.25rem" }}>
@@ -242,24 +411,19 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
       <div className="flex items-baseline gap-2 mb-1">
         {section.locked && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
         <span className="font-mono text-gray-400 shrink-0 text-sm select-none">{section.number}</span>
-        <span className={headingClass}>{section.title}</span>
+        <EditableText value={section.title} onChange={v => onUpdate({ title: v })} className={headingClass} placeholder="Section title..." disabled={section.lockEdit} />
       </div>
 
-      {/* Section body */}
-      <div style={{ marginLeft: `${32}px` }}>
-        <EngineerSectionContent
-          content={section.content}
-          fields={fields}
-          fieldValues={fieldValues}
-          locked={section.locked}
-          onChangeContent={v => onChangeContent(section.id, v)}
-          onChangeField={onChangeField}
-        />
+      {/* Section body — uses SectionContent for blank rendering */}
+      <div className="ml-8" style={{ marginLeft: `${depth * 16 + 32}px` }}>
+        <SectionContent content={section.content} fields={fields} locked={section.lockEdit}
+          onClickBlank={onClickBlank} onDeleteBlank={onDeleteBlank}
+          onChange={v => onUpdate({ content: v })} />
       </div>
 
       {/* Tables - read-only for engineers */}
       {section.tables && section.tables.length > 0 && (
-        <div style={{ marginLeft: `${32}px` }} className="mt-3 space-y-4">
+        <div className="mt-3 space-y-4" style={{ marginLeft: `${depth * 16 + 32}px` }}>
           {section.tables.map(table => (
             <table key={table.id} className="border-collapse text-xs w-full">
               <tbody>
@@ -278,6 +442,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
         </div>
       )}
 
+      {/* Recursively rendered children */}
       {children}
     </div>
   );
@@ -291,8 +456,9 @@ function DocumentPage({ hf, pageNumber, children }: {
   pageNumber: number;
   children: React.ReactNode;
 }) {
-  // Resolve {PAGE} token in footer zones
-  const resolve = (text: string) => text.replace("{PAGE}", String(pageNumber));
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id });
+  const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
+  const hasChildren = section.children.length > 0;
 
   return (
     <div className="bg-white shadow-lg mx-auto text-black" style={{ width: "8.5in", minHeight: "11in", display: "flex", flexDirection: "column" }}>
@@ -320,15 +486,27 @@ function DocumentPage({ hf, pageNumber, children }: {
   );
 }
 
-// ─── Section helpers ──────────────────────────────────────────────────────────
+// ============= PURE SECTION HELPERS =============
+// These functions take a section tree in and return a new tree out — no state mutations.
+// Called inside setData() so they always operate on the latest state snapshot.
+ 
+// Assigns correct auto-numbers to the entire tree. Top-level = "1.0", children = "1.1", "1.1.1" etc.
+function renumberSections(sections: SectionNode[], prefix = ""): SectionNode[] {
+  return sections.map((s, i) => {
+    const number = prefix ? `${prefix}.${i + 1}` : `${i + 1}.0`;
+    return { ...s, number, children: renumberSections(s.children, number.replace(/\.0$/, "")) };
+  });
+}
 
-// Updates section content in the tree by section ID
-function updateSectionContent(sections: SectionNode[], id: string, content: string): SectionNode[] {
-  return sections.map(s =>
-    s.id === id
-      ? { ...s, content }
-      : { ...s, children: updateSectionContent(s.children, id, content) }
-  );
+// Searches the tree for a section by ID — used before updates that need current field values
+function findSection(sections: SectionNode[], id: string): SectionNode | null {
+  for (const s of sections) { if (s.id === id) return s; const found = findSection(s.children, id); if (found) return found; }
+  return null;
+}
+
+// Returns a new tree with one section's fields merged with the updates object
+function updateSection(sections: SectionNode[], id: string, updates: Partial<SectionNode>): SectionNode[] {
+  return sections.map(s => s.id === id ? { ...s, ...updates } : { ...s, children: updateSection(s.children, id, updates) });
 }
 
 // ─── Questionnaire helpers ────────────────────────────────────────────────────
@@ -717,42 +895,33 @@ function SowEngineerPageInner() {
     }
   }
 
+  const selectedSection = selectedSectionId ? findSection(data.sections, selectedSectionId) : null;
+
+  // DnD sensors - PointerSensor requires 5px movement before activating to avoid accidental drags
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor)
+  );
+
+  // Shorthand updaters for cover page and header/footer fields
+  const updateCover = (k: keyof typeof data.coverPage, v: string) =>
+    setData(p => ({ ...p, coverPage: { ...p.coverPage, [k]: v } }));
+  const updateHF = (k: keyof HeaderFooterData, v: string) =>
+    setData(p => ({ ...p, headerFooter: { ...p.headerFooter, [k]: v } }));
   function toggleExpand(id: string) {
-    setExpandedIds(prev => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }
-
-  // Updates an unlocked section's content text
-  function handleChangeContent(sectionId: string, value: string) {
-    setData(p => ({ ...p, sections: updateSectionContent(p.sections, sectionId, value) }));
-  }
-
-  // Updates a single field value the engineer typed into a blank
-  function handleChangeField(fieldId: string, value: string) {
-    setFieldValues(prev => ({ ...prev, [fieldId]: value }));
+    setExpandedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
   }
 
   // Saves a draft by merging field values back into the template fields
   // and downloading the result as a JSON file the engineer can reload later.
   // This is a temporary testing tool - will be removed once export to Word is the primary output.
   function handleSave() {
-    const merged: TemplateData = {
-      ...data,
-      fields: data.fields.map(f => ({
-        ...f,
-        defaultValue: fieldValues[f.id] ?? f.defaultValue,
-      })),
-    };
-    const blob = new Blob([JSON.stringify(merged, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}-draft-${new Date().toISOString().split("T")[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.json`;
+    a.click(); URL.revokeObjectURL(url);
   }
 
   // Exports the completed SOW as a Word document via the FastAPI docx service.
@@ -801,82 +970,163 @@ function SowEngineerPageInner() {
   // Loads a previously saved draft JSON file
   function handleLoad() {
     const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
+    input.type = "file"; input.accept = ".json";
     input.onchange = (e: Event) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
+      const file = (e.target as HTMLInputElement).files?.[0]; if (!file) return;
       const reader = new FileReader();
       reader.onload = ev => {
         try {
-          const loaded = JSON.parse(ev.target?.result as string) as TemplateData;
-          setData(loaded);
-          const values: Record<string, string> = {};
-          loaded.fields.forEach(f => { if (f.defaultValue) values[f.id] = f.defaultValue; });
-          setFieldValues(values);
-          setExpandedIds(new Set(loaded.sections.map(s => s.id)));
-        } catch {
-          alert("Invalid draft file.");
-        }
+          const loaded = JSON.parse(ev.target?.result as string);
+          setData(loaded); setEditedName(loaded.documentName || "Untitled Document");
+          setExpandedIds(new Set(loaded.sections.map((s: SectionNode) => s.id)));
+        } catch { alert("Invalid JSON file"); }
       };
       reader.readAsText(file);
     };
     input.click();
   }
 
-  // Recursively renders sections for the document page
+  // handleExport is a placeholder — planned: Next.js API → sanitize → Flask → python-docx → .docx download
+  function handleExport() {
+    alert("Export to Word will generate a .docx file. Backend integration coming soon!");
+  }
+
+  // ── Insert Blank ──
+  // Creates a new TemplateField, appends its {{fieldId}} token to the selected section's content,
+  // and adds the field to data.fields so SectionContent can render it as a BlankChip
+  function handleInsertBlank() {
+    if (!blankLabel.trim() || !selectedSectionId) return;
+    const fieldId = `field_${blankLabel.trim().toLowerCase().replace(/\s+/g, "_")}_${Date.now()}`;
+    const newField: TemplateField = {
+      id: fieldId, label: blankLabel.trim(), type: blankType,
+      placeholder: blankPlaceholder || undefined, required: blankRequired,
+    };
+    setData(p => {
+      const sec = findSection(p.sections, selectedSectionId);
+      const newContent = sec ? (sec.content ? sec.content + ` {{${fieldId}}}` : `{{${fieldId}}}`) : "";
+      return {
+        ...p,
+        fields: [...p.fields, newField],
+        sections: updateSection(p.sections, selectedSectionId, { content: newContent }),
+      };
+    });
+    setBlankLabel(""); setBlankPlaceholder(""); setBlankRequired(false);
+    setShowBlankForm(false);
+  }
+
+  // ── Delete Blank (from data.fields + all section content) ──
+  // Removes the field from data.fields and strips its {{token}} from every section content string
+  function handleDeleteBlank(fieldId: string) {
+    setData(p => ({
+      ...p,
+      fields: p.fields.filter(f => f.id !== fieldId),
+      sections: removeBlankFromContent(p.sections, fieldId),
+    }));
+    if (editingFieldId === fieldId) setEditingFieldId(null);
+  }
+
+  // ── Update Blank Field ──
+  // Updates label, type, placeholder, or required on an existing TemplateField
+  function handleUpdateField(fieldId: string, updates: Partial<TemplateField>) {
+    setData(p => ({ ...p, fields: p.fields.map(f => f.id === fieldId ? { ...f, ...updates } : f) }));
+  }
+
+  // ── DnD handler ──
+  // Called when a drag ends — uses reorderSectionsByIds to move the dragged section
+  // to the dropped position, then renumbers the entire tree
+  function handleDragEnd(event: DragEndEvent) {
+    const { active, over } = event;
+    if (!over || active.id === over.id) return;
+    setData(p => ({
+      ...p,
+      sections: renumberSections(reorderSectionsByIds(p.sections, String(active.id), String(over.id))),
+    }));
+  }
+
+  // ── Section rendering ──
+  // Recursively renders the section tree as SortableSectionBlock components.
+  // All mutation callbacks defined here so they can close over setData from this component.
   function renderSections(sections: SectionNode[], depth = 0): React.ReactNode {
-    return sections.map(section => (
-      <EngineerSectionBlock
-        key={section.id}
-        section={section}
-        depth={depth}
-        fields={data.fields}
-        fieldValues={fieldValues}
-        onChangeContent={handleChangeContent}
-        onChangeField={handleChangeField}
-      >
-        {section.children.length > 0 && renderSections(section.children, depth + 1)}
-      </EngineerSectionBlock>
-    ));
+    return (
+      <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
+        {sections.map(section => {
+          const onUpdate = (u: Partial<SectionNode>) => setData(p => ({ ...p, sections: updateSection(p.sections, section.id, u) }));
+          const onAddChild = () => {
+            setData(p => ({ ...p, sections: renumberSections(addChildSection(p.sections, section.id)) }));
+            setExpandedIds(p => new Set([...p, section.id]));
+          };
+          const onAddSibling = () => setData(p => {
+            const r = addSiblingHelper(p.sections, section.id);
+            return r.added ? { ...p, sections: renumberSections(r.sections) } : p;
+          });
+          const onDelete = () => {
+            if (!confirm("Delete this section and all its subsections?")) return;
+            setData(p => ({ ...p, sections: renumberSections(deleteSection(p.sections, section.id)) }));
+            if (selectedSectionId === section.id) setSelectedSectionId(null);
+          };
+          const onAddTable = (rows: number, cols: number) => {
+            if (rows < 1 || rows > 20 || cols < 1 || cols > 10) { alert("Rows: 1-20, Columns: 1-10"); return; }
+            const newTable: TableData = { id: `t-${Date.now()}`, rows, cols, data: Array(rows).fill(null).map(() => Array(cols).fill("")) };
+            setData(p => {
+              const sec = findSection(p.sections, section.id);
+              return { ...p, sections: updateSection(p.sections, section.id, { tables: [...(sec?.tables || []), newTable] }) };
+            });
+          };
+          const onDeleteTable = (tid: string) => setData(p => {
+            const sec = findSection(p.sections, section.id);
+            return { ...p, sections: updateSection(p.sections, section.id, { tables: sec?.tables?.filter(t => t.id !== tid) }) };
+          });
+          // Updates a single cell — maps over rows and cells, replacing only the one that changed
+          const onUpdateCell = (tid: string, row: number, col: number, val: string) => setData(p => {
+            const sec = findSection(p.sections, section.id);
+            const tables = sec?.tables?.map(t => t.id === tid
+              ? { ...t, data: t.data.map((r, ri) => r.map((c, ci) => ri === row && ci === col ? val : c)) } : t);
+            return { ...p, sections: updateSection(p.sections, section.id, { tables }) };
+          });
+
+          return (
+            <SortableSectionBlock key={section.id} section={section} depth={depth}
+              isOnlyTop={depth === 0 && data.sections.length === 1}
+              isSelected={selectedSectionId === section.id}
+              fields={data.fields}
+              onSelect={() => setSelectedSectionId(section.id)}
+              onUpdate={onUpdate} onAddChild={onAddChild} onAddSibling={onAddSibling}
+              onDelete={onDelete}
+              onAddTable={onAddTable} onDeleteTable={onDeleteTable} onUpdateCell={onUpdateCell}
+              onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank}>
+              {section.children.length > 0 && renderSections(section.children, depth + 1)}
+            </SortableSectionBlock>
+          );
+        })}
+      </SortableContext>
+    );
   }
 
   // Renders the left navigator panel - click to scroll, expand/collapse
   function renderNav(sections: SectionNode[], depth = 0): React.ReactNode {
-    return sections.map(section => {
-      const hasChildren = section.children.length > 0;
-      const isExpanded = expandedIds.has(section.id);
-      return (
-        <div key={section.id}>
-          <button
-            onClick={() => document.getElementById(section.id)?.scrollIntoView({ behavior: "smooth", block: "start" })}
-            className="w-full flex items-center gap-1 rounded px-2 py-1.5 text-left text-xs hover:bg-muted transition-colors"
-            style={{ paddingLeft: `${8 + depth * 12}px` }}
-          >
-            {hasChildren ? (
-              <span onClick={e => { e.stopPropagation(); toggleExpand(section.id); }}
-                className="cursor-pointer hover:bg-accent rounded p-0.5 inline-flex shrink-0">
-                {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-              </span>
-            ) : (
-              <div className="w-4 shrink-0" />
-            )}
-            {section.locked && <Lock className="h-2.5 w-2.5 text-slate-400 shrink-0" />}
-            <span className="font-mono text-gray-400 min-w-[35px] shrink-0">{section.number}</span>
-            <span className="truncate">{section.title}</span>
-          </button>
-          {hasChildren && isExpanded && renderNav(section.children, depth + 1)}
-        </div>
-      );
-    });
+    return (
+      <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
+        {sections.map(section => {
+          const hasChildren = section.children.length > 0;
+          const isExpanded = expandedIds.has(section.id);
+          return (
+            <div key={section.id}>
+              <SortableNavItem section={section} depth={depth} isExpanded={isExpanded}
+                onToggleExpand={() => toggleExpand(section.id)}
+                onSelect={() => { setSelectedSectionId(section.id); document.getElementById(section.id)?.scrollIntoView({ behavior: "smooth", block: "start" }); }}
+                isSelected={selectedSectionId === section.id} />
+              {hasChildren && isExpanded && renderNav(section.children, depth + 1)}
+            </div>
+          );
+        })}
+      </SortableContext>
+    );
   }
 
   const tocData = generateTOCEntries(data.sections);
+  const editingField = editingFieldId ? data.fields.find(f => f.id === editingFieldId) : null;
 
-  // Count how many blanks still need to be filled
-  const totalBlanks = data.fields.length;
-  const filledBlanks = data.fields.filter(f => (fieldValues[f.id] ?? f.defaultValue ?? "").trim() !== "").length;
-
+  // ============= RENDER =============
   return (
     <div className="flex flex-col h-screen overflow-hidden">
 
@@ -970,51 +1220,105 @@ function SowEngineerPageInner() {
                       <p className="text-xl mt-2">{data.coverPage.date}</p>
                     </div>
                   </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Label</label>
+                    <Input value={editingField.label} onChange={e => handleUpdateField(editingField.id, { label: e.target.value })} className="h-8 w-32 text-sm" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Type</label>
+                    <select value={editingField.type} onChange={e => handleUpdateField(editingField.id, { type: e.target.value as FieldType })}
+                      className="h-8 rounded border border-input bg-background px-2 text-sm">
+                      {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Placeholder</label>
+                    <Input value={editingField.placeholder || ""} onChange={e => handleUpdateField(editingField.id, { placeholder: e.target.value })} className="h-8 w-32 text-sm" />
+                  </div>
+                  <div className="flex flex-col gap-1">
+                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Default</label>
+                    <Input value={editingField.defaultValue || ""} onChange={e => handleUpdateField(editingField.id, { defaultValue: e.target.value })} className="h-8 w-32 text-sm" />
+                  </div>
+                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                    <input type="checkbox" checked={editingField.required ?? false} onChange={e => handleUpdateField(editingField.id, { required: e.target.checked })} className="rounded" />
+                    Required
+                  </label>
+                  <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditingFieldId(null)}>
+                    <X className="h-3 w-3" /> Close
+                  </Button>
+                </div>
+              )}
+
+              {/* ── Document pages ── */}
+              <div className="flex-1 overflow-y-auto bg-gray-200 p-8" onClick={() => setSelectedSectionId(null)}>
+                <div className="space-y-8">
+                  {/* Cover Page — all fields are EditableText components connected to coverPage state */}
+                  <div className="bg-white shadow-lg mx-auto relative text-black" style={{ width: "8.5in", height: "11in" }}>
+                    <div className="absolute inset-8 border-4 border-black pointer-events-none" />
+                    <div className="absolute inset-8 flex items-center justify-center">
+                      <div className="text-center w-full px-12">
+                        <EditableText value={data.coverPage.title} onChange={v => updateCover("title", v)} className="text-4xl font-bold" placeholder="SOW Title" />
+
+                        <p className="text-3xl font-semibold mt-6 select-none">FOR</p>
+                        <EditableText value={data.coverPage.clientName} onChange={v => updateCover("clientName", v)} className="text-4xl font-bold mt-4" placeholder="Product Name" />
+                            
+                        <div className="flex items-baseline justify-center gap-2 mt-10">
+                          <span className="text-3xl font-semibold select-none">BUILDING</span>
+                          <EditableText value={data.coverPage.building} onChange={v => updateCover("building", v)} className="text-3xl font-semibold" placeholder="#" />
+                        </div>
+
+                        <div className="mt-16 space-y-3">
+                          <EditableText value={data.coverPage.location} onChange={v => updateCover("location", v)} className="text-xl" placeholder="Location" />
+                          <p className="text-lg font-semibold mt-10 select-none">Prepared by</p>
+                          <EditableText value={data.coverPage.preparedBy} onChange={v => updateCover("preparedBy", v)} className="text-xl" placeholder="Name" />
+                          <EditableText value={data.coverPage.department} onChange={v => updateCover("department", v)} className="text-xl" placeholder="Team / Department" />
+                          <EditableText value={data.coverPage.date} onChange={v => updateCover("date", v)} className="text-xl mt-2" placeholder="Date" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Table of Contents — auto-generated from tocData, not directly editable */}
+                  <DocumentPage hf={data.headerFooter} onHF={updateHF} pageNumber={2}>
+                    <h2 className="font-bold text-lg mb-6 text-center">Table of Contents</h2>
+                    <div className="space-y-0.5">
+                      {tocData.entries.map((entry, i) => (
+                        <div key={i} className="flex justify-between items-baseline text-[11px]" style={{ paddingLeft: `${entry.depth * 16}px` }}>
+                          <div className="flex items-baseline gap-2 flex-1">
+                            <span className="font-mono text-gray-600 shrink-0" style={{ minWidth: "40px" }}>{entry.number}</span>
+                            <span>{entry.title}</span>
+                            <span className="flex-1 border-b border-dotted border-gray-400 mx-1 mb-0.5" />
+                          </div>
+                          <span className="font-mono text-gray-600 shrink-0">{entry.page}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </DocumentPage>
+
+                  {/* Section Content — locked sections shown read-only, unlocked sections editable */}
+                  <DocumentPage hf={data.headerFooter} onHF={updateHF} pageNumber={3}>
+                    {renderSections(data.sections)}
+                  </DocumentPage>
                 </div>
               </div>
-
-              {/* Table of Contents */}
-              <DocumentPage hf={data.headerFooter} pageNumber={2}>
-                <h2 className="font-bold text-lg mb-6 text-center">Table of Contents</h2>
-                <div className="space-y-0.5">
-                  {tocData.entries.map((entry, i) => (
-                    <div key={i} className="flex justify-between items-baseline text-[11px]" style={{ paddingLeft: `${entry.depth * 16}px` }}>
-                      <div className="flex items-baseline gap-2 flex-1">
-                        <span className="font-mono text-gray-600 shrink-0" style={{ minWidth: "40px" }}>{entry.number}</span>
-                        <span>{entry.title}</span>
-                        <span className="flex-1 border-b border-dotted border-gray-400 mx-1 mb-0.5" />
-                      </div>
-                      <span className="font-mono text-gray-600 shrink-0">{entry.page}</span>
-                    </div>
-                  ))}
-                </div>
-              </DocumentPage>
-
-              {/* Section content */}
-              <DocumentPage hf={data.headerFooter} pageNumber={3}>
-                {data.sections.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-64 text-center gap-2">
-                    <p className="text-sm text-muted-foreground">No sections loaded.</p>
-                    <p className="text-xs text-muted-foreground">Load a saved draft using the button in the toolbar.</p>
-                  </div>
-                ) : (
-                  renderSections(data.sections)
-                )}
-              </DocumentPage>
-
             </div>
-          </div>
+          </DndContext>
         </div>
       </div>
     </div>
   );
 }
 
-// Suspense wrapper required by Next.js when using useSearchParams
-export default function SowEngineerPage() {
+// Suspense wrapper for useSearchParams()
+export default function SowEditPage() {
+  const { data: sessionData } = useSession();
+
+
   return (
-    <Suspense fallback={<div className="flex items-center justify-center h-screen text-sm text-muted-foreground">Loading...</div>}>
-      <SowEngineerPageInner />
-    </Suspense>
+    <div>
+      <Suspense fallback={<div className="flex items-center justify-center h-screen">Loading editor...</div>}>
+        <SowEditPageInner />
+      </Suspense>
+    </div>
   );
 }
