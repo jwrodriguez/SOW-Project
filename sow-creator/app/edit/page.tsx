@@ -555,38 +555,75 @@ function SowEditPageInner() {
   // If ?setup= param is present (base64 JSON from the /new form), decode and override defaults.
   const defaultData: TemplateData = useMemo(() => {
     const base: TemplateData = {
-      documentName: "Untitled Document",
-      fields: [],
+      documentName: "Untitled SOW",
+      // Each entry here is a blank the admin inserted via the blank form in the edit page.
+      // The id must exactly match the token embedded in the section content string below.
+      fields: [
+        { id: "field_product_name_001",       label: "Product Name",                    type: "text",      placeholder: "e.g. F-16 Avionics Suite",         required: true  },
+        { id: "field_contractor_tasks_002",    label: "Contractor Tasks",                type: "sentence",  placeholder: "e.g. install, maintain, and test",  required: true  },
+        { id: "field_contractor_service_003",  label: "Service Description",             type: "sentence",  placeholder: "e.g. provide 24/7 technical support",required: true  },
+        { id: "field_items_purchased_004",     label: "Items to be Purchased",           type: "text",      placeholder: "e.g. hydraulic actuators",          required: true  },
+        { id: "field_install_location_005",    label: "Installation Location",           type: "text",      placeholder: "e.g. Tinker AFB, Building 3001",    required: true  },
+        { id: "field_use_purpose_006",         label: "Purpose of Use",                  type: "sentence",  placeholder: "e.g. F-16 maintenance operations",  required: false },
+        { id: "field_delivery_location_007",   label: "Delivery Location",               type: "text",      placeholder: "e.g. Dock B, Building 3001",        required: false },
+        { id: "field_applicable_stds_008",     label: "Applicable Standards",            type: "paragraph", placeholder: "List any additional standards...",  required: false },
+        { id: "field_prohibited_mats_009",     label: "Prohibited Materials",            type: "paragraph", placeholder: "List any prohibited materials...",  required: false },
+        { id: "field_written_submittals_010",  label: "Written Submittals",              type: "paragraph", placeholder: "Describe required documentation...",required: false },
+        { id: "field_gfp_details_011",         label: "Government Furnished Property",   type: "paragraph", placeholder: "List any GFP items provided...",    required: false },
+      ],
       coverPage: {
-        title: "Statement of Work", projectNumber: "SOW-2026-001", clientName: "Product Name",
-        building: "3001", location: "Norman, Oklahoma", preparedBy: "Your Name",
-        department: "Department Name", date: new Date().toISOString().split("T")[0],
-        version: "1.0", confidentiality: "Confidential",
+        title: "Statement of Work",
+        projectNumber: "SOW-2026-001",
+        clientName: "",
+        building: "",
+        location: "",
+        preparedBy: "",
+        department: "",
+        date: new Date().toISOString().split("T")[0],
+        version: "1.0",
+        confidentiality: "Confidential",
       },
       headerFooter: {
-        headerLeft: "Statement of Work\n3 February 2025", headerCenter: "", headerRight: "",
-        footerLeft: "SOW-2026-001", footerCenter: "", footerRight: "Page {PAGE}",
-        showPageNumbers: true, pageNumberPosition: "footer-right",
+        headerLeft: "Statement of Work",
+        headerCenter: "",
+        headerRight: "",
+        footerLeft: "SOW-2026-001",
+        footerCenter: "",
+        footerRight: "Page {PAGE}",
+        showPageNumbers: true,
+        pageNumberPosition: "footer-right",
       },
       sections: [
-        { id: "sec-1", number: "1.0", title: "Scope of Work", content: "", locked: true, tables: [],
+        {
+          id: "sec-1", number: "1.0", title: "Scope of Work", content: "", locked: true, tables: [],
           children: [
-            { id: "sec-1-1", number: "1.1", title: "Scope", content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {YOUR PRODUCT}. The contractor should {do these things} and {provide this service}.", locked: false, tables: [], children: [] },
-            { id: "sec-1-2", number: "1.2", title: "Background", content: "The {items to be purchased} are intended to be used at {a location} for {a purpose}. {the items} shoud be delivered to {a location} ", locked: false, tables: [], children: [] },
-          ]
+            // Unlocked - engineer edits freely. Blanks here are still filled via the questionnaire.
+            {
+              id: "sec-1-1", number: "1.1", title: "Scope", locked: false, tables: [], children: [],
+              content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {{field_product_name_001}}. The contractor should {{field_contractor_tasks_002}} and {{field_contractor_service_003}}.",
+            },
+            {
+              id: "sec-1-2", number: "1.2", title: "Background", locked: false, tables: [], children: [],
+              content: "The {{field_items_purchased_004}} are intended to be used at {{field_install_location_005}} for {{field_use_purpose_006}}. The items should be delivered to {{field_delivery_location_007}}.",
+            },
+          ],
         },
-        { id: "sec-2", number: "2.0", title: "Applicable Standards", content: "Contractor, at a minimum, is required to comply with the current editions of the following requirements for design, construction, installation, and safety as applicable. The term “most recent edition” shall be understood to mean “most recently released edition as of date of issuance of contract.” ", locked: true, tables: [],
+        {
+          id: "sec-2", number: "2.0", title: "Applicable Standards", locked: true, tables: [],
+          content: "Contractor, at a minimum, is required to comply with the current editions of the following requirements for design, construction, installation, and safety as applicable.",
           children: [
-            { id: "sec-2-1", number: "2.1", title: "Government Standards", content: "The following documents form a part of this purchase description to the extent stipulated herein.", locked: true, tables: [], children: [] },
-            { id: "sec-2-2", number: "2.2", title: "Non-Government Standards", content: "The following documents form a part of this document to the extent stipulated herein. ", locked: true, tables: [], children: [] },
-            { id: "sec-2-3", number: "2.3", title: "Order of Precedence", content: "", locked: true, tables: [], children: [] },
-            { id: "sec-2-4", number: "2.4", title: "Applicable Standards", content: "", locked: true, tables: [], children: [] },
-            { id: "sec-2-5", number: "2.5", title: "Prohibited Materials", content: "", locked: true, tables: [], children: [] },
-            { id: "sec-2-6", number: "2.6", title: "Environmental Protection", content: "Under the operating, service, transportation and storage conditions described herein the machine shall not emit materials hazardous to the ecological system as prohibited by federal, state or local statutes in effect at the point of installation. ", locked: true, tables: [], children: [] },
-          ]
+            { id: "sec-2-1", number: "2.1", title: "Government Standards",    content: "The following documents form a part of this purchase description to the extent stipulated herein.",  locked: true, tables: [], children: [] },
+            { id: "sec-2-2", number: "2.2", title: "Non-Government Standards", content: "The following documents form a part of this document to the extent stipulated herein.",              locked: true, tables: [], children: [] },
+            { id: "sec-2-3", number: "2.3", title: "Order of Precedence",      content: "In the event of a conflict between the text of this specification and the references cited herein, the text of this specification takes precedence.", locked: true, tables: [], children: [] },
+            // Locked with blank - engineer fills via questionnaire bar or inline input
+            { id: "sec-2-4", number: "2.4", title: "Applicable Standards",    content: "{{field_applicable_stds_008}}",   locked: true, tables: [], children: [] },
+            { id: "sec-2-5", number: "2.5", title: "Prohibited Materials",    content: "{{field_prohibited_mats_009}}",    locked: true, tables: [], children: [] },
+            { id: "sec-2-6", number: "2.6", title: "Environmental Protection", content: "Under the operating, service, transportation and storage conditions described herein the machine shall not emit materials hazardous to the ecological system as prohibited by federal, state or local statutes in effect at the point of installation.", locked: true, tables: [], children: [] },
+          ],
         },
-        { id: "sec-3", number: "3.0", title: "Written Submittals", content: "", locked: true, tables: [], children: [] },
-        { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "", locked: true, tables: [], children: [] },
+        // Locked with blanks - lock states now match the admin edit page defaults
+        { id: "sec-3", number: "3.0", title: "Written Submittals",                       content: "{{field_written_submittals_010}}", locked: true, tables: [], children: [] },
+        { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "{{field_gfp_details_011}}",        locked: true, tables: [], children: [] },
       ],
     };
 
@@ -598,7 +635,8 @@ function SowEditPageInner() {
     const loadData = async () => {
       try {
         const dbData = await getGlobalTemplate();
-        setData(dbData as TemplateData);
+        if (dbData){
+        setData(dbData as TemplateData);}
       } catch (e) {
         console.error("Failed to load template from IndexedDB:", e);
       }
