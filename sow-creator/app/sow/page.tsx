@@ -11,190 +11,157 @@
  */
 "use client";
 
-import React, { Suspense, useMemo, useState} from "react";
+import React, { Suspense, useMemo, useState, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
-// import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { useSession } from "@/lib/auth-client";
-import { SidebarMenuButton } from "@/components/ui/sidebar";
-import { Plane } from "lucide-react";
+import { Save, Download, FileText, ChevronRight, ChevronDown, Lock, ChevronLeft, CheckCircle2, Circle, FileDown, Plane } from "lucide-react";
+import type { TemplateData, SectionNode, TemplateField, HeaderFooterData } from "@/types/pageTypes";
+import { getGlobalTemplate } from "@/lib/db-pullTemp";
+import { set } from "better-auth";
 
-import {
-  Plus, Trash2, Download, Save, FileText, ChevronRight, ChevronDown,
-  ListOrdered, Edit2, Table as TableIcon, Lock, Unlock, GripVertical,
-  X, Check, PlusCircle, type LucideIcon,
-} from "lucide-react";
-import {
-  DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
-  type DragEndEvent,
-} from "@dnd-kit/core";
-import {
-  SortableContext, useSortable, verticalListSortingStrategy, arrayMove,
-} from "@dnd-kit/sortable";
-import { CSS } from "@dnd-kit/utilities";
+// ─── Default blank template ───────────────────────────────────────────────────
+// Used when no draft or template is passed via URL. Engineers should normally
+// arrive here by loading a JSON file saved from the admin edit page.
+//
+// Two types of editable content exist in this template:
+//
+// 1. UNLOCKED SECTIONS (locked: false) - engineers click and type freely.
+//    The text inside is just a hint showing what to write, not a real blank.
+//
+// 2. BLANKS in LOCKED SECTIONS - double curly {{field_id}} tokens match entries
+//    in data.fields. These appear in both the document as inline inputs AND in
+//    the questionnaire bar above. The admin creates these in the edit page using
+//    the blank insertion form. Filling one in updates both places simultaneously.
+//
+// This default template has sample blanks already set up so the questionnaire
+// bar is visible immediately. A real template saved from the admin editor replaces
+// these with its own fields and tokens.
+const DEFAULT_TEMPLATE: TemplateData = {
+  documentName: "Untitled SOW",
+  // Each entry here is a blank the admin inserted via the blank form in the edit page.
+  // The id must exactly match the token embedded in the section content string below.
+  fields: [
+    { id: "field_product_name_001",       label: "Product Name",                    type: "text",      placeholder: "e.g. F-16 Avionics Suite",         required: true  },
+    { id: "field_contractor_tasks_002",    label: "Contractor Tasks",                type: "sentence",  placeholder: "e.g. install, maintain, and test",  required: true  },
+    { id: "field_contractor_service_003",  label: "Service Description",             type: "sentence",  placeholder: "e.g. provide 24/7 technical support",required: true  },
+    { id: "field_items_purchased_004",     label: "Items to be Purchased",           type: "text",      placeholder: "e.g. hydraulic actuators",          required: true  },
+    { id: "field_install_location_005",    label: "Installation Location",           type: "text",      placeholder: "e.g. Tinker AFB, Building 3001",    required: true  },
+    { id: "field_use_purpose_006",         label: "Purpose of Use",                  type: "sentence",  placeholder: "e.g. F-16 maintenance operations",  required: false },
+    { id: "field_delivery_location_007",   label: "Delivery Location",               type: "text",      placeholder: "e.g. Dock B, Building 3001",        required: false },
+    { id: "field_applicable_stds_008",     label: "Applicable Standards",            type: "paragraph", placeholder: "List any additional standards...",  required: false },
+    { id: "field_prohibited_mats_009",     label: "Prohibited Materials",            type: "paragraph", placeholder: "List any prohibited materials...",  required: false },
+    { id: "field_written_submittals_010",  label: "Written Submittals",              type: "paragraph", placeholder: "Describe required documentation...",required: false },
+    { id: "field_gfp_details_011",         label: "Government Furnished Property",   type: "paragraph", placeholder: "List any GFP items provided...",    required: false },
+  ],
+  coverPage: {
+    title: "Statement of Work",
+    projectNumber: "SOW-2026-001",
+    clientName: "",
+    building: "",
+    location: "",
+    preparedBy: "",
+    department: "",
+    date: new Date().toISOString().split("T")[0],
+    version: "1.0",
+    confidentiality: "Confidential",
+  },
+  headerFooter: {
+    headerLeft: "Statement of Work",
+    headerCenter: "",
+    headerRight: "",
+    footerLeft: "SOW-2026-001",
+    footerCenter: "",
+    footerRight: "Page {PAGE}",
+    showPageNumbers: true,
+    pageNumberPosition: "footer-right",
+  },
+  sections: [
+    {
+      id: "sec-1", number: "1.0", title: "Scope of Work", content: "", locked: true, tables: [],
+      children: [
+        // Unlocked - engineer edits freely. Blanks here are still filled via the questionnaire.
+        {
+          id: "sec-1-1", number: "1.1", title: "Scope", locked: false, tables: [], children: [],
+          content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {{field_product_name_001}}. The contractor should {{field_contractor_tasks_002}} and {{field_contractor_service_003}}.",
+        },
+        {
+          id: "sec-1-2", number: "1.2", title: "Background", locked: false, tables: [], children: [],
+          content: "The {{field_items_purchased_004}} are intended to be used at {{field_install_location_005}} for {{field_use_purpose_006}}. The items should be delivered to {{field_delivery_location_007}}.",
+        },
+      ],
+    },
+    {
+      id: "sec-2", number: "2.0", title: "Applicable Standards", locked: true, tables: [],
+      content: "Contractor, at a minimum, is required to comply with the current editions of the following requirements for design, construction, installation, and safety as applicable.",
+      children: [
+        { id: "sec-2-1", number: "2.1", title: "Government Standards",    content: "The following documents form a part of this purchase description to the extent stipulated herein.",  locked: true, tables: [], children: [] },
+        { id: "sec-2-2", number: "2.2", title: "Non-Government Standards", content: "The following documents form a part of this document to the extent stipulated herein.",              locked: true, tables: [], children: [] },
+        { id: "sec-2-3", number: "2.3", title: "Order of Precedence",      content: "In the event of a conflict between the text of this specification and the references cited herein, the text of this specification takes precedence.", locked: true, tables: [], children: [] },
+        // Locked with blank - engineer fills via questionnaire bar or inline input
+        { id: "sec-2-4", number: "2.4", title: "Applicable Standards",    content: "{{field_applicable_stds_008}}",   locked: true, tables: [], children: [] },
+        { id: "sec-2-5", number: "2.5", title: "Prohibited Materials",    content: "{{field_prohibited_mats_009}}",    locked: true, tables: [], children: [] },
+        { id: "sec-2-6", number: "2.6", title: "Environmental Protection", content: "Under the operating, service, transportation and storage conditions described herein the machine shall not emit materials hazardous to the ecological system as prohibited by federal, state or local statutes in effect at the point of installation.", locked: true, tables: [], children: [] },
+      ],
+    },
+    // Locked with blanks - lock states now match the admin edit page defaults
+    { id: "sec-3", number: "3.0", title: "Written Submittals",                       content: "{{field_written_submittals_010}}", locked: true, tables: [], children: [] },
+    { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "{{field_gfp_details_011}}",        locked: true, tables: [], children: [] },
+  ],
+};
 
-// ============= TYPES =============
-// You can find Type Declarations and Descriptions used in .../types/pageTypes.ts
-import {FieldType, TemplateField, SectionNode, TableData, HeaderFooterData, TemplateData} from "@/types/pageTypes";
+// ─── TOC generator ───────────────────────────────────────────────────────────
+// Builds a flat list of TOC entries from the section tree for Page 2.
+// Page numbers are estimates based on section count, not actual rendered height.
+function generateTOCEntries(sections: SectionNode[], depth = 0, startPage = 3) {
+  const entries: Array<{ number: string; title: string; page: number; depth: number }> = [];
+  let page = startPage;
+  for (const s of sections) {
+    entries.push({ number: s.number, title: s.title, page, depth });
+    page++;
+    if (s.children.length > 0) {
+      const r = generateTOCEntries(s.children, depth + 1, page);
+      entries.push(...r.entries);
+      page = r.nextPage;
+    }
+  }
+  return { entries, nextPage: page };
+}
 
-// Allowed field types listed here so both the insert form and edit form share the same options
-const FIELD_TYPES: { value: FieldType; label: string }[] = [
-  { value: "text", label: "Text" }, { value: "number", label: "Number" },
-  { value: "word", label: "Word" }, { value: "sentence", label: "Sentence" },
-  { value: "paragraph", label: "Paragraph" }, { value: "list", label: "List" },
-  { value: "date", label: "Date" },
-];
-
-// ============= RIBBON BUTTON =============
-// Reusable button for the editing ribbon toolbar.
-// Supports disabled, active (highlighted), and danger (red) visual states.
-function RibbonBtn({ icon: Icon, label, onClick, disabled, active, danger }: {
-  icon: LucideIcon; label: string; onClick?: () => void; disabled?: boolean; active?: boolean; danger?: boolean;
+// ─── Inline blank input ───────────────────────────────────────────────────────
+// Renders a single blank field as an inline input inside section text.
+// Engineers type directly into these - no colored chip, just a clean input.
+function BlankInput({ field, value, onChange }: {
+  field: TemplateField;
+  value: string;
+  onChange: (v: string) => void;
 }) {
   return (
-    <button onClick={onClick} disabled={disabled} title={label}
-      className={`flex flex-col items-center gap-0.5 px-2 py-1 rounded text-[10px] transition-colors
-        ${disabled ? "opacity-30 cursor-not-allowed" : "hover:bg-black/5 dark:hover:bg-white/10 cursor-pointer"}
-        ${active ? "bg-primary/10 text-primary" : ""}
-        ${danger ? "text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20" : ""}`}>
-      <Icon className="h-4 w-4" />
-      <span className="leading-none">{label}</span>
-    </button>
+    <input
+      type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
+      value={value}
+      onChange={e => onChange(e.target.value)}
+      placeholder={field.placeholder || field.label}
+      title={field.label}
+      className="inline-block border-b border-primary/60 bg-primary/5 text-primary rounded px-1 py-0.5 text-sm min-w-[80px] max-w-[240px] outline-none focus:border-primary focus:bg-primary/10 transition-colors"
+      style={{ width: `${Math.max(80, (value.length || field.label.length) * 8)}px` }}
+    />
   );
 }
 
-// ============= INLINE EDITING =============
-/**
- * Single-line click-to-edit field. When disabled (section locked), renders as plain text. When enabled, clicking swaps the display div for an <input>. Enter or blur confirms.
- * @param value The text content to display/edit
- * @param onChange Callback when text changes, recieves updated string value
- * @param className Optional additional class names for styling
- * @param placeholder Placeholder text when value is empty
- * @param disabled Boolean value indicating whether the text is open for editing or locked
- * 
- * @returns A JSX element that displays text and allows inline editing on click, with support for different input types and customizable styling. When the value is empty, it shows a placeholder to prompt the user to add content.
- */
-export function EditableText({ value, onChange, className = "", placeholder = "Click to edit", disabled }: {
-  value: string;
-  onChange: (v: string) => void;
-  className?: string;
-  placeholder?: string;
-  disabled?: boolean;
+// ─── Section content renderer ─────────────────────────────────────────────────
+// Parses section content for {{field_id}} tokens. Locked sections render
+// tokens as fillable BlankInputs but cannot edit surrounding text.
+// Unlocked sections are fully editable text areas, with blanks still inline.
+function EngineerSectionContent({ content, fields, fieldValues, locked, onChangeContent, onChangeField }: {
+  content: string;
+  fields: TemplateField[];
+  fieldValues: Record<string, string>;
+  locked: boolean;
+  onChangeContent: (v: string) => void;
+  onChangeField: (fieldId: string, value: string) => void;
 }) {
   const [editing, setEditing] = useState(false);
-  if (disabled) return (
-    <div className={`px-1 min-h-[1.2em] ${className}`}>
-      {value || <span className="text-gray-400 italic text-sm font-normal">{placeholder}</span>}
-    </div>
-  );
-  return editing ? (
-    <input autoFocus type="text" value={value} onChange={e => onChange(e.target.value)}
-      onBlur={() => setEditing(false)} onKeyDown={e => e.key === "Enter" && setEditing(false)}
-      className={`bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full ${className}`} />
-  ) : (
-    <div onClick={() => setEditing(true)}
-      className={`cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 min-h-[1.2em] ${className}`}>
-      {value || <span className="text-gray-400 italic text-sm font-normal">{placeholder}</span>}
-    </div>
-  );
-}
-
-/**
- * Multi-line click-to-edit field. Same disabled/enabled pattern as EditableText but uses a <textarea>. Row height auto-adjusts based on newline count in the content.
- * @param value The text content to display/edit
- * @param onChange Callback when text changes, recieves updated string value 
- * @param className Optional additional class names for styling
- * @param placeholder Placeholder text when value is empty
- * @param disabled Boolean value determining whether the section is locked or open for editing 
- *
- * @returns A JSX element that displays text and allows inline editing on click
- */
-
-export function EditableArea({ value, onChange, className = "", placeholder = "Click to add content...", disabled }: {
-  value: string;
-  onChange: (v: string) => void;
-  className?: string;
-  placeholder?: string;
-  disabled?: boolean;
-}) {
-  const [editing, setEditing] = useState(false);
-  if (disabled) return (
-    <div className={`px-1 whitespace-pre-wrap min-h-[1.2em] ${className}`}>
-      {value || <span className="text-gray-400 italic text-sm font-normal">{placeholder}</span>}
-    </div>
-  );
-  return editing ? (
-    <textarea autoFocus value={value} onChange={e => onChange(e.target.value)}
-      onBlur={() => setEditing(false)} rows={Math.max(3, (value.match(/\n/g) || []).length + 2)}
-      className={`bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full resize-none ${className}`} />
-  ) : (
-    <div onClick={() => setEditing(true)}
-      className={`cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 whitespace-pre-wrap min-h-[1.2em] ${className}`}>
-      {value || <span className="text-gray-400 italic text-sm font-normal">{placeholder}</span>}
-    </div>
-  );
-}
-/**
- * Editable footer zone component — similar to EditableArea but supports {PAGE} token that renders the current page number. This helps users understand how to include page numbers in their footer.
- * @param value The text content to display/edit
- * @param onChange Callback when text changes, recieves updated string value
- * @param pageNumber page number input to replace {PAGE} token with in display mode
- * @param className Optional additional class names for styling
- * @param placeholder Placeholder text when value is empty
- * 
- * @returns A JSX element for editing footer text with support for dynamic page numbers via the {PAGE} token. Displays the resolved page number in display mode and shows the {PAGE} token in edit mode to clarify usage.
- */
-export function EditableFooterZone({ value, onChange, pageNumber, className = "", placeholder = "Click to add footer content..." }: {
-  value: string;
-  onChange: (v: string) => void;
-  pageNumber: number;
-  className?: string;
-  placeholder?: string;
-}) {
-  const [editing, setEditing] = useState(false);
-  return editing ? (
-    <textarea autoFocus value={value} onChange={e => onChange(e.target.value)}
-      onBlur={() => setEditing(false)} rows={Math.max(1, (value.match(/\n/g) || []).length + 1)}
-      className={`bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full resize-none text-sm ${className}`} />
-  ) : (
-    <div onClick={() => setEditing(true)}
-      className={`cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 whitespace-pre-wrap min-h-[1.2em] text-sm ${className}`}>
-      {value ? value.replace("{PAGE}", String(pageNumber))
-        : <span className="text-gray-400 italic text-sm">{placeholder}</span>}
-    </div>
-  );
-}
-
-// ============= BLANK CHIP =============
-// Renders a fillable blank as a colored inline pill inside section content.
-// Color is driven by the data-type attribute and CSS in globals.css (.blank-chip styles).
-// Clicking opens the blank's property editor in the ribbon. X removes it.
-function BlankChip({ field, onClick, onDelete }: {
-  field: TemplateField; onClick: () => void; onDelete: () => void;
-}) {
-  return (
-    <span className="blank-chip" data-type={field.type} onClick={onClick}>
-      <span>{field.label}</span>
-      <span className="opacity-60 text-[10px]">({field.type})</span>
-      <button onClick={e => { e.stopPropagation(); onDelete(); }}
-        className="ml-0.5 opacity-40 hover:opacity-100 transition-opacity" title="Remove blank">
-        <X className="h-3 w-3" />
-      </button>
-    </span>
-  );
-}
-
-// ============= CONTENT RENDERER (parses {{field_id}} blanks) =============
-// Parses the section content string for {{field_id}} tokens and renders them as BlankChips.
-// Plain text between tokens renders as normal spans.
-// When unlocked: click-to-edit textarea. When locked: static text with interactive blank chips.
-function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, onChange }: {
-  content: string; fields: TemplateField[]; locked: boolean;
-  onClickBlank: (fieldId: string) => void; onDeleteBlank: (fieldId: string) => void;
-  onChange: (v: string) => void;
-}) {
   const fieldMap = useMemo(() => new Map(fields.map(f => [f.id, f])), [fields]);
 
   // Parse content into segments: text and {{field_id}} tokens
@@ -213,78 +180,52 @@ function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, 
     return parts;
   }, [content]);
 
-  const [editing, setEditing] = useState(false);
-
-  // If unlocked, show raw editable content
-  if (!locked) {
-    return editing ? (
-      <textarea autoFocus value={content} onChange={e => onChange(e.target.value)}
-        onBlur={() => setEditing(false)} rows={Math.max(3, (content.match(/\n/g) || []).length + 2)}
-        className="bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full resize-none text-sm leading-relaxed" />
-    ) : (
-      <div onClick={() => setEditing(true)}
-        className="cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 whitespace-pre-wrap min-h-[1.2em] text-sm leading-relaxed">
-        {segments.map((seg, i) => {
-          if (seg.type === "text") return <span key={i}>{seg.value}</span>;
-          const field = fieldMap.get(seg.fieldId);
-          if (!field) return <span key={i} className="text-red-400">{`{{${seg.fieldId}}}`}</span>;
-          return <BlankChip key={i} field={field} onClick={() => onClickBlank(field.id)} onDelete={() => onDeleteBlank(field.id)} />;
-        })}
-        {!content && <span className="text-gray-400 italic text-sm font-normal">Click to add content...</span>}
-      </div>
-    );
-  }
-
-  // Locked: render static text with blank chips
-  return (
-    <div className="whitespace-pre-wrap min-h-[1.2em] text-sm leading-relaxed px-1">
+  // Renders the content with blank inputs inline
+  const renderedContent = (
+    <div className="whitespace-pre-wrap text-sm leading-relaxed">
       {segments.map((seg, i) => {
         if (seg.type === "text") return <span key={i}>{seg.value}</span>;
         const field = fieldMap.get(seg.fieldId);
-        if (!field) return <span key={i} className="text-red-400">{`{{${seg.fieldId}}}`}</span>;
-        return <BlankChip key={i} field={field} onClick={() => onClickBlank(field.id)} onDelete={() => onDeleteBlank(field.id)} />;
+        if (!field) return <span key={i} className="text-red-400 text-xs">[unknown field]</span>;
+        return (
+          <BlankInput
+            key={i}
+            field={field}
+            value={fieldValues[seg.fieldId] ?? field.defaultValue ?? ""}
+            onChange={v => onChangeField(seg.fieldId, v)}
+          />
+        );
       })}
       {!content && <span className="text-gray-400 italic text-sm font-normal">No content — insert blanks or unlock to edit.</span>}
     </div>
   );
-}
 
-// ============= DOCUMENT PAGE WRAPPER =============
-/**
- * Renders an 8.5x11in white page with editable header and footer zones (left/center/right). Children are rendered in the body area between the header and footer.
- * @param hf The Header and Footer Data to be imported into the reusable page wrapper
- * @param onHF setter function that updates a designated section of content in the HeaderFooterData object
- * @param pageNumber The designated number of the page to be generated in the open document
- * @param children Document body content to be imported into the page wrapper
- * 
- * @returns A JSX Element component serving as a template/design for a specific page of the document with editable header footer areas
- */
-export function DocumentPage({ hf, onHF, pageNumber, children }: {
-  hf: HeaderFooterData; onHF: (k: keyof HeaderFooterData, v: string) => void; pageNumber: number; children: React.ReactNode;
-}) {
-  return (
-    <div className="bg-white shadow-lg mx-auto text-black" style={{ width: "8.5in", minHeight: "11in", display: "flex", flexDirection: "column" }}>
-      <div style={{ padding: "0.5in 1in 0.1in 1in" }}>
-        <div className="grid grid-cols-3 gap-1 text-sm text-gray-700">
-          <EditableArea value={hf.headerLeft} onChange={v => onHF("headerLeft", v)} placeholder="Header left" />
-          <EditableArea value={hf.headerCenter} onChange={v => onHF("headerCenter", v)} className="text-center" placeholder="Header center" />
-          <EditableArea value={hf.headerRight} onChange={v => onHF("headerRight", v)} className="text-right" placeholder="Header right" />
-        </div>
-      </div>
-      <div style={{ padding: "0.1in 1in", flex: 1 }}>{children}</div>
-      <div style={{ padding: "0.1in 1in 0.5in 1in" }}>
-        <div className="grid grid-cols-3 gap-1 text-gray-700">
-          {(hf.showPageNumbers && hf.pageNumberPosition === "footer-left") ? (
-              <EditableFooterZone value={hf.footerLeft} onChange={v => onHF("footerLeft", v)} pageNumber={pageNumber} className="text-left" placeholder="Page {PAGE}" />
-          ): <EditableFooterZone value={hf.footerLeft} onChange={v => onHF("footerLeft", v)} pageNumber={pageNumber} className="text-left" placeholder="Footer left" />}
-          {(hf.showPageNumbers && hf.pageNumberPosition === "footer-center") ? (
-              <EditableFooterZone value={hf.footerCenter} onChange={v => onHF("footerCenter", v)} pageNumber={pageNumber} className="text-center" placeholder="Page {PAGE}" />
-          ): <EditableFooterZone value={hf.footerCenter} onChange={v => onHF("footerCenter", v)} pageNumber={pageNumber} className="text-center" placeholder="Footer center" />}
-          {(hf.showPageNumbers && hf.pageNumberPosition === "footer-right") ? (
-              <EditableFooterZone value={hf.footerRight} onChange={v => onHF("footerRight", v)} pageNumber={pageNumber} className="text-right" placeholder="Page {PAGE}" />
-          ): <EditableFooterZone value={hf.footerRight} onChange={v => onHF("footerRight", v)} pageNumber={pageNumber} className="text-right" placeholder="Footer right" />}
-        </div>
-      </div>
+  // Locked sections show static text with fillable blank inputs - no text editing
+  if (locked) {
+    return <div className="px-1">{renderedContent}</div>;
+  }
+
+  // Unlocked sections are click-to-edit. While editing, show raw textarea.
+  // Blank chips are not shown in edit mode - engineer edits raw content string.
+  // When they click away, the rendered view with blanks comes back.
+  return editing ? (
+    <textarea
+      autoFocus
+      value={content}
+      onChange={e => onChangeContent(e.target.value)}
+      onBlur={() => setEditing(false)}
+      rows={Math.max(3, (content.match(/\n/g) || []).length + 2)}
+      placeholder="Click to add content..."
+      className="w-full bg-blue-50 border border-blue-300 rounded px-2 py-1 outline-none resize-none text-sm leading-relaxed"
+    />
+  ) : (
+    <div
+      onClick={() => setEditing(true)}
+      className="cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 min-h-[1.5em]"
+    >
+      {content ? renderedContent : (
+        <span className="text-gray-400 italic text-sm">Click to add content...</span>
+      )}
     </div>
   );
 }
@@ -335,62 +276,10 @@ export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fi
   const locked = section.lockEdit || section.lockDelete || section.lockAddTable || section.lockAddSections;
 
   return (
-    <div ref={setNodeRef} style={style} id={section.id}
-      className={`relative ${""} ${isSelected ? "ring-2 ring-primary/30 rounded" : ""}`}
-      onClick={e => { e.stopPropagation(); onSelect(); }}
-      onMouseEnter={() => setHovered(true)} onMouseLeave={() => { setHovered(false); setShowTableForm(false); }}>
-
-      {/* Hover toolbar */}
-      {hovered && (
-        <div className="absolute -top-1 right-0 flex gap-1 bg-white border border-gray-200 rounded shadow-md px-1.5 py-1 z-20 text-xs whitespace-nowrap">
-          {/* Drag handle */}
-          {/* <button {...attributes} {...listeners} className="drag-handle px-1 py-0.5 rounded flex items-center" title="Drag to reorder">
-            <GripVertical className="h-3 w-3" />
-          </button> */}
-
-          {/* Can they add sections? */}
-          {section.lockAddSections ? <></> : (
-            <>
-            <button onClick={onAddChild} title="Add subsection" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
-                <Plus className="h-3 w-3" /> Sub
-            </button>
-            <button onClick={onAddSibling} title="Add section at same level" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
-                <Plus className="h-3 w-3" /> Section
-            </button>
-            </>)}
-          
-          {/* can they add tables? */}
-          {section.lockAddTable ? <></> : (
-          <button onClick={() => setShowTableForm(t => !t)} title="Add table" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
-            <TableIcon className="h-3 w-3" /> Table
-          </button>)}
-
-          {/* can they delete? */}
-          {section.lockDelete ? <Lock className="h-3 w-3" /> : (
-          <button onClick={onDelete} disabled={isOnlyTop} title="Delete section"
-            className="hover:bg-red-50 px-1.5 py-0.5 rounded flex items-center gap-1 text-red-500 disabled:opacity-30">
-            <Trash2 className="h-3 w-3" />
-          </button>)}
-        </div>
-      )
-      }
-
-      {/* Table size picker */}
-      {showTableForm && (
-        <div className="flex items-center gap-2 mb-2 p-2 bg-gray-50 border border-gray-200 rounded text-xs">
-          <span className="text-gray-600">Rows (1-20):</span>
-          <input type="number" min={1} max={20} value={tr} onChange={e => setTr(Number(e.target.value) || 3)} className="w-12 border rounded px-1 py-0.5" />
-          <span className="text-gray-600">× Cols (1-10):</span>
-          <input type="number" min={1} max={10} value={tc} onChange={e => setTc(Number(e.target.value) || 3)} className="w-12 border rounded px-1 py-0.5" />
-          <button onClick={() => { onAddTable(tr, tc); setShowTableForm(false); }}
-            className="bg-primary text-primary-foreground px-2 py-0.5 rounded hover:opacity-90">Add</button>
-          <button onClick={() => setShowTableForm(false)} className="px-2 py-0.5 rounded hover:bg-gray-200 text-gray-600">Cancel</button>
-        </div>
-      )}
-
-      {/* Section heading */}
-      <div className="flex items-baseline gap-2 mb-1" style={{ marginLeft: `${depth * 16}px` }}>
-        {section.lockEdit && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
+    <div id={section.id} style={{ marginLeft: `${indent}px`, marginBottom: depth === 0 ? "2rem" : "1.25rem" }}>
+      {/* Section heading - read-only for engineers, lock icon shown when locked */}
+      <div className="flex items-baseline gap-2 mb-1">
+        {section.locked && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
         <span className="font-mono text-gray-400 shrink-0 text-sm select-none">{section.number}</span>
         <EditableText value={section.title} onChange={v => onUpdate({ title: v })} className={headingClass} placeholder="Section title..." disabled={section.lockEdit} />
       </div>
@@ -402,30 +291,23 @@ export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fi
           onChange={v => onUpdate({ content: v })} />
       </div>
 
-      {/* Tables */}
+      {/* Tables - read-only for engineers */}
       {section.tables && section.tables.length > 0 && (
         <div className="mt-3 space-y-4" style={{ marginLeft: `${depth * 16 + 32}px` }}>
           {section.tables.map(table => (
-            <div key={table.id}>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-400 font-mono">{table.rows}×{table.cols} table</span>
-                <button onClick={() => onDeleteTable(table.id)} className="text-red-400 hover:text-red-600"><Trash2 className="h-3 w-3" /></button>
-              </div>
-              <table className="border-collapse text-xs w-full">
-                <tbody>
-                  {table.data.map((row, ri) => (
-                    <tr key={ri}>
-                      {row.map((cell, ci) => (
-                        <td key={ci} className="border border-gray-300 p-0">
-                          <input value={cell} onChange={e => onUpdateCell(table.id, ri, ci, e.target.value)}
-                            className="w-full p-1.5 outline-none focus:bg-blue-50" placeholder={`r${ri + 1}c${ci + 1}`} />
-                        </td>
-                      ))}
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <table key={table.id} className="border-collapse text-xs w-full">
+              <tbody>
+                {table.data.map((row, ri) => (
+                  <tr key={ri}>
+                    {row.map((cell, ci) => (
+                      <td key={ci} className="border border-gray-300 p-1.5 text-sm">
+                        {cell || <span className="text-gray-300">-</span>}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           ))}
         </div>
       )}
@@ -436,100 +318,324 @@ export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fi
   );
 }
 
-// ============= SORTABLE NAV ITEM =============
-// Renders one item in the left section navigator with drag-and-drop support.
-// Clicking selects the section and smooth-scrolls the document page to it.
-// Lock icon shown when locked. Expand/collapse arrow shown when children exist.
-function SortableNavItem({ section, depth, isExpanded, onToggleExpand, onSelect, isSelected }: {
-  section: SectionNode; depth: number; isExpanded: boolean;
-  onToggleExpand: () => void; onSelect: () => void; isSelected: boolean;
+// ─── Document page wrapper ────────────────────────────────────────────────────
+// Renders an 8.5x11in white page with static header and footer.
+// Engineers cannot edit the header or footer - those are admin-controlled.
+function DocumentPage({ hf, pageNumber, children }: {
+  hf: HeaderFooterData;
+  pageNumber: number;
+  children: React.ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id });
   const style = { transform: CSS.Transform.toString(transform), transition, opacity: isDragging ? 0.5 : 1 };
   const hasChildren = section.children.length > 0;
 
   return (
-    <div ref={setNodeRef} style={style}>
-      <div className={`w-full flex items-center gap-1 rounded px-2 py-1.5 text-xs transition-colors
-          ${isSelected ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted"}`}
-        style={{ paddingLeft: `${8 + depth * 12}px` }}>
-        {/* <button {...attributes} {...listeners} className="drag-handle p-0.5 rounded inline-flex shrink-0">
-          <GripVertical className="h-3 w-3" />
-        </button> */}
-        {hasChildren
-          ? <span onClick={e => { e.stopPropagation(); onToggleExpand(); }} className="cursor-pointer hover:bg-accent rounded p-0.5 inline-flex shrink-0">
-              {isExpanded ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
-            </span>
-          : <div className="w-4 shrink-0" />}
-        <button onClick={onSelect} className="flex items-center gap-1 flex-1 min-w-0 text-left">
-          {section.lockEdit && <Lock className="h-2.5 w-2.5 text-slate-400 shrink-0" />}
-          <span className="font-mono text-gray-400 min-w-[35px] shrink-0">{section.number}</span>
-          <span className="truncate">{section.title}</span>
-        </button>
+    <div className="bg-white shadow-lg mx-auto text-black" style={{ width: "8.5in", minHeight: "11in", display: "flex", flexDirection: "column" }}>
+      {/* Header - static, not editable by engineers */}
+      <div style={{ padding: "0.5in 1in 0.1in 1in" }}>
+        <div className="grid grid-cols-3 gap-1 text-sm text-gray-700">
+          <div className="whitespace-pre-wrap">{hf.headerLeft}</div>
+          <div className="whitespace-pre-wrap text-center">{hf.headerCenter}</div>
+          <div className="whitespace-pre-wrap text-right">{hf.headerRight}</div>
+        </div>
+      </div>
+
+      {/* Body */}
+      <div style={{ padding: "0.1in 1in", flex: 1 }}>{children}</div>
+
+      {/* Footer - static, {PAGE} resolved */}
+      <div style={{ padding: "0.1in 1in 0.5in 1in" }}>
+        <div className="grid grid-cols-3 gap-1 text-sm text-gray-700">
+          <div className="whitespace-pre-wrap">{resolve(hf.footerLeft)}</div>
+          <div className="whitespace-pre-wrap text-center">{resolve(hf.footerCenter)}</div>
+          <div className="whitespace-pre-wrap text-right">{resolve(hf.footerRight)}</div>
+        </div>
       </div>
     </div>
   );
 }
 
-// ============= PURE SECTION HELPERS =============
-// These functions take a section tree in and return a new tree out — no state mutations.
-// Called inside setData() so they always operate on the latest state snapshot.
- 
-// Assigns correct auto-numbers to the entire tree. Top-level = "1.0", children = "1.1", "1.1.1" etc.
-function renumberSections(sections: SectionNode[], prefix = ""): SectionNode[] {
-  return sections.map((s, i) => {
-    const number = prefix ? `${prefix}.${i + 1}` : `${i + 1}.0`;
-    return { ...s, number, children: renumberSections(s.children, number.replace(/\.0$/, "")) };
-  });
+// ─── Section helpers ──────────────────────────────────────────────────────────
+
+// Updates section content in the tree by section ID
+function updateSectionContent(sections: SectionNode[], id: string, content: string): SectionNode[] {
+  return sections.map(s =>
+    s.id === id
+      ? { ...s, content }
+      : { ...s, children: updateSectionContent(s.children, id, content) }
+  );
 }
 
-// Searches the tree for a section by ID — used before updates that need current field values
-function findSection(sections: SectionNode[], id: string): SectionNode | null {
-  for (const s of sections) { if (s.id === id) return s; const found = findSection(s.children, id); if (found) return found; }
-  return null;
-}
+// ─── Questionnaire helpers ────────────────────────────────────────────────────
 
-// Returns a new tree with one section's fields merged with the updates object
-function updateSection(sections: SectionNode[], id: string, updates: Partial<SectionNode>): SectionNode[] {
-  return sections.map(s => s.id === id ? { ...s, ...updates } : { ...s, children: updateSection(s.children, id, updates) });
-}
+// Represents one question in the questionnaire bar - a blank field with
+// the section context it belongs to so the bar can show where it lives.
+type QuestionItem = {
+  field: TemplateField;
+  sectionId: string;
+  sectionNumber: string;
+  sectionTitle: string;
+};
 
-// Appends a blank subsection inside the given parent
-function addChildSection(sections: SectionNode[], parentId: string): SectionNode[] {
-  return sections.map(s => s.id === parentId
-    ? { ...s, children: [...s.children, { id: `sec-${Date.now()}`, number: "", title: "New Subsection", lockEdit: false, lockDelete: false, lockAddTable: false, lockAddSections: false, content: "", tables: [], children: [] }] }
-    : { ...s, children: addChildSection(s.children, parentId) });
-}
+// Walks the section tree in document order and builds a flat ordered list
+// of questions by finding every {{field_id}} token in section content strings.
+// Fields that appear multiple times are deduplicated - first occurrence wins.
+// This preserves the reading order of the document which is the natural
+// questionnaire order for the engineer.
+function buildQuestionList(sections: SectionNode[], fields: TemplateField[]): QuestionItem[] {
+  const fieldMap = new Map(fields.map(f => [f.id, f]));
+  const seen = new Set<string>();
+  const questions: QuestionItem[] = [];
+  const regex = /\{\{([^}]+)\}\}/g;
 
-// Inserts a new section directly after the sibling at the same nesting level
-function addSiblingHelper(sections: SectionNode[], siblingId: string): { sections: SectionNode[]; added: boolean } {
-  for (let i = 0; i < sections.length; i++) {
-    if (sections[i].id === siblingId) {
-      const newSec: SectionNode = { id: `sec-${Date.now()}`, number: "", title: "New Section", content: "", lockEdit: false, lockDelete: false, lockAddTable: false, lockAddSections: false, tables: [], children: [] };
-      const next = [...sections]; next.splice(i + 1, 0, newSec);
-      return { sections: next, added: true };
+  function walk(nodes: SectionNode[]) {
+    for (const section of nodes) {
+      // Reset regex lastIndex for each content string
+      regex.lastIndex = 0;
+      let match;
+      while ((match = regex.exec(section.content)) !== null) {
+        const fieldId = match[1];
+        if (!seen.has(fieldId) && fieldMap.has(fieldId)) {
+          seen.add(fieldId);
+          questions.push({
+            field: fieldMap.get(fieldId)!,
+            sectionId: section.id,
+            sectionNumber: section.number,
+            sectionTitle: section.title,
+          });
+        }
+      }
+      if (section.children.length > 0) walk(section.children);
     }
-    const r = addSiblingHelper(sections[i].children, siblingId);
-    if (r.added) return { sections: sections.map((s, j) => j === i ? { ...s, children: r.sections } : s), added: true };
   }
-  return { sections, added: false };
+
+  walk(sections);
+  return questions;
 }
 
-// Removes a section and all its children from the tree
-function deleteSection(sections: SectionNode[], id: string): SectionNode[] {
-  return sections.filter(s => s.id !== id).map(s => ({ ...s, children: deleteSection(s.children, id) }));
-}
+// ─── Questionnaire bar ────────────────────────────────────────────────────────
+// Sticky panel below the main header. Shows one question at a time with
+// prev/next navigation and a dropdown to jump to any question.
+// Dot indicators show answered/skipped/current status for every question at a glance.
+// The input here calls onChangeField - same handler as the inline BlankInputs -
+// so the document preview updates live as the engineer types.
+function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, onChangeIndex }: {
+  questions: QuestionItem[];
+  activeIndex: number;
+  fieldValues: Record<string, string>;
+  onChangeField: (fieldId: string, value: string) => void;
+  onChangeIndex: (index: number) => void;
+}) {
+  const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
 
-// Builds a flat list of TOC entries with estimated page numbers for Page 2
-function generateTOCEntries(sections: SectionNode[], depth = 0, startPage = 2) {
-  const entries: Array<{ number: string; title: string; page: number; depth: number }> = [];
-  let page = startPage;
-  for (const s of sections) {
-    entries.push({ number: s.number, title: s.title, page, depth });
-    page++;
-    if (s.children.length > 0) { const r = generateTOCEntries(s.children, depth + 1, page); entries.push(...r.entries); page = r.nextPage; }
+  // Focus the input whenever the active question changes
+  useEffect(() => {
+    inputRef.current?.focus();
+  }, [activeIndex]);
+
+  if (questions.length === 0) return null;
+
+  const current = questions[activeIndex];
+  const value = fieldValues[current.field.id] ?? current.field.defaultValue ?? "";
+
+  // Compute answered/skipped status for every question for the dot tracker
+  const statuses = questions.map((q, i) => {
+    const v = (fieldValues[q.field.id] ?? q.field.defaultValue ?? "").trim();
+    if (i === activeIndex) return "active";
+    if (v !== "") return "answered";
+    return "skipped";
+  });
+
+  const filledCount = statuses.filter(s => s === "answered").length;
+  const skippedCount = statuses.filter(s => s === "skipped" || (s === "active" && value.trim() === "")).length;
+  const allDone = filledCount === questions.length || (filledCount === questions.length - 1 && value.trim() !== "");
+  const isFilled = value.trim() !== "";
+
+  function handleKey(e: React.KeyboardEvent) {
+    if (e.key === "Enter" && activeIndex < questions.length - 1) {
+      e.preventDefault();
+      onChangeIndex(activeIndex + 1);
+    }
   }
-  return { entries, nextPage: page };
+
+  // Finds the next unanswered question after the current index for the Skip button
+  function findNextSkipped(): number | null {
+    for (let i = activeIndex + 1; i < questions.length; i++) {
+      const v = (fieldValues[questions[i].field.id] ?? questions[i].field.defaultValue ?? "").trim();
+      if (v === "") return i;
+    }
+    // Wrap around and check before current index
+    for (let i = 0; i < activeIndex; i++) {
+      const v = (fieldValues[questions[i].field.id] ?? questions[i].field.defaultValue ?? "").trim();
+      if (v === "") return i;
+    }
+    return null;
+  }
+
+  const nextSkipped = findNextSkipped();
+
+  return (
+    <div className="shrink-0 border-b bg-background shadow-sm px-5 py-4 z-20 space-y-3">
+
+      {/* Row 1 - question number, section badge, title, progress summary */}
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2.5">
+          {/* Dropdown to jump to any question - grouped by section */}
+          <select
+            value={activeIndex}
+            onChange={e => onChangeIndex(Number(e.target.value))}
+            className="text-xs border border-input rounded px-2 py-1 bg-background outline-none focus:border-primary cursor-pointer font-medium"
+          >
+            {(() => {
+              // Group questions by section title for optgroup labels
+              const groups: { sectionNumber: string; sectionTitle: string; items: { q: QuestionItem; i: number }[] }[] = [];
+              questions.forEach((q, i) => {
+                const last = groups[groups.length - 1];
+                if (last && last.sectionTitle === q.sectionTitle) {
+                  last.items.push({ q, i });
+                } else {
+                  groups.push({ sectionNumber: q.sectionNumber, sectionTitle: q.sectionTitle, items: [{ q, i }] });
+                }
+              });
+              return groups.map(group => (
+                <optgroup key={group.sectionTitle} label={`${group.sectionNumber} ${group.sectionTitle}`}>
+                  {group.items.map(({ q, i }) => {
+                    const v = (fieldValues[q.field.id] ?? q.field.defaultValue ?? "").trim();
+                    return (
+                      <option key={q.field.id} value={i}>
+                        {v !== "" ? "✓" : "○"} {q.field.label}
+                      </option>
+                    );
+                  })}
+                </optgroup>
+              ));
+            })()}
+          </select>
+
+          {/* Section context */}
+          <span className="text-xs bg-primary/10 text-primary font-mono px-2 py-0.5 rounded-full font-medium">
+            {current.sectionNumber}
+          </span>
+          <span className="text-xs text-muted-foreground truncate max-w-[240px]">
+            {current.sectionTitle}
+          </span>
+        </div>
+
+        {/* Progress summary - single consolidated indicator */}
+        <div className="flex items-center gap-2">
+          {allDone ? (
+            <span className="text-xs text-green-600 font-semibold flex items-center gap-1">
+              <CheckCircle2 className="h-3.5 w-3.5" /> All {questions.length} answered
+            </span>
+          ) : (
+            <span className="text-xs font-medium flex items-center gap-1.5">
+              <span className="text-green-600">{filledCount + (isFilled ? 1 : 0)} answered</span>
+              <span className="text-muted-foreground">·</span>
+              <span className="text-amber-600">{skippedCount - (isFilled ? 1 : 0) < 0 ? 0 : skippedCount - (isFilled ? 1 : 0)} unanswered</span>
+            </span>
+          )}
+        </div>
+      </div>
+
+      {/* Row 2 - dot tracker showing status of every question */}
+      <div className="flex items-center gap-1 flex-wrap">
+        {statuses.map((status, i) => (
+          <button
+            key={questions[i].field.id}
+            onClick={() => onChangeIndex(i)}
+            title={`Q${i + 1}: ${questions[i].field.label} - ${status === "answered" ? "answered" : status === "active" ? "current" : "unanswered"}`}
+            className={`h-2.5 rounded-full transition-all ${
+              status === "active"
+                ? "w-6 bg-primary"
+                : status === "answered"
+                  ? "w-2.5 bg-green-500 hover:bg-green-400"
+                  : "w-2.5 bg-amber-300 hover:bg-amber-400 dark:bg-amber-600"
+            }`}
+          />
+        ))}
+      </div>
+
+      {/* Row 3 - label, input, navigation */}
+      <div className="flex items-center gap-3">
+        {/* Prev button */}
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-9 px-3 shrink-0"
+          disabled={activeIndex === 0}
+          onClick={() => onChangeIndex(activeIndex - 1)}
+          title="Previous question"
+        >
+          <ChevronLeft className="h-4 w-4" />
+        </Button>
+
+        {/* Question label + input */}
+        <div className="flex-1 flex items-center gap-3 min-w-0">
+          <label className="text-sm font-semibold shrink-0 flex items-center gap-1 min-w-fit">
+            {current.field.required && (
+              <span className="text-destructive text-xs" title="Required">*</span>
+            )}
+            {current.field.label}
+          </label>
+
+          {current.field.type === "paragraph" ? (
+            <textarea
+              ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+              value={value}
+              onChange={e => onChangeField(current.field.id, e.target.value)}
+              placeholder={current.field.placeholder || `Enter ${current.field.label.toLowerCase()}...`}
+              rows={2}
+              className="flex-1 border border-input rounded-md px-3 py-2 text-sm bg-background outline-none focus:border-primary resize-none"
+            />
+          ) : (
+            <input
+              ref={inputRef as React.RefObject<HTMLInputElement>}
+              type={current.field.type === "number" ? "number" : current.field.type === "date" ? "date" : "text"}
+              value={value}
+              onChange={e => onChangeField(current.field.id, e.target.value)}
+              onKeyDown={handleKey}
+              placeholder={current.field.placeholder || `Enter ${current.field.label.toLowerCase()}...`}
+              className="flex-1 h-9 border border-input rounded-md px-3 text-sm bg-background outline-none focus:border-primary"
+            />
+          )}
+
+          {/* Answered checkmark */}
+          {isFilled && (
+            <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+          )}
+        </div>
+
+        {/* Jump to next skipped button - only shows when there are unanswered questions */}
+        {nextSkipped !== null && (
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-9 px-3 text-xs shrink-0 text-amber-600 hover:text-amber-700 hover:bg-amber-50 dark:hover:bg-amber-900/20"
+            onClick={() => onChangeIndex(nextSkipped)}
+            title="Jump to next unanswered question"
+          >
+            Next unanswered
+          </Button>
+        )}
+
+        {/* Next button */}
+        <Button
+          size="sm"
+          variant={activeIndex < questions.length - 1 ? "outline" : "default"}
+          className="h-9 px-4 shrink-0"
+          disabled={activeIndex === questions.length - 1}
+          onClick={() => onChangeIndex(activeIndex + 1)}
+        >
+          {activeIndex < questions.length - 1 ? (
+            <><span className="text-xs mr-1">Next</span><ChevronRight className="h-4 w-4" /></>
+          ) : (
+            <span className="text-xs">Done</span>
+          )}
+        </Button>
+      </div>
+    </div>
+  );
 }
 
 // Handles drag-and-drop reordering — finds the dragged section in its sibling list
@@ -558,113 +664,192 @@ function removeBlankFromContent(sections: SectionNode[], fieldId: string): Secti
 function SowEditPageInner() {
   const searchParams = useSearchParams();
 
-  // Build initial document state once with useMemo.
-  // If ?setup= param is present (base64 JSON from the /new form), decode and override defaults.
-  const defaultData: TemplateData = useMemo(() => {
-    const base: TemplateData = {
-      documentName: "SOW ID",
-      fields: [],
-      coverPage: {
-        title: "Statement of Work", projectNumber: "SOW-2026-001", clientName: "Product Name",
-        building: "3001", location: "Norman, Oklahoma", preparedBy: "Your Name",
-        department: "Department Name", date: new Date().toISOString().split("T")[0],
-        version: "1.0", confidentiality: "Confidential",
-      },
-      headerFooter: {
-        headerLeft: "Statement of Work\n3 February 2025", headerCenter: "", headerRight: "",
-        footerLeft: "SOW-2026-001", footerCenter: "", footerRight: "Page {PAGE}",
-        showPageNumbers: true, pageNumberPosition: "footer-right",
-      },
-      sections: [
-        { id: "sec-1", number: "1.0", title: "Scope of Work", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [],
-          children: [
-            { id: "sec-1-1", number: "1.1", title: "Scope", content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {YOUR PRODUCT}. The contractor should {do these things} and {provide this service}.", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
-            { id: "sec-1-2", number: "1.2", title: "Background", content: "The {items to be purchased} are intended to be used at {a location} for {a purpose}. {the items} shoud be delivered to {a location} ", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
-          ]
-        },
-        { id: "sec-2", number: "2.0", title: "Applicable Standards", content: "Contractor, at a minimum, is required to comply with the current editions of the following requirements for design, construction, installation, and safety as applicable. The term “most recent edition” shall be understood to mean “most recently released edition as of date of issuance of contract.” ", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [],
-          children: [
-            { id: "sec-2-1", number: "2.1", title: "Government Standards", content: "The following documents form a part of this purchase description to the extent stipulated herein.", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
-            { id: "sec-2-2", number: "2.2", title: "Non-Government Standards", content: "The following documents form a part of this document to the extent stipulated herein. ", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
-            { id: "sec-2-3", number: "2.3", title: "Order of Precedence", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
-            { id: "sec-2-4", number: "2.4", title: "Applicable Standards", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
-            { id: "sec-2-5", number: "2.5", title: "Prohibited Materials", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
-            { id: "sec-2-6", number: "2.6", title: "Environmental Protection", content: "Under the operating, service, transportation and storage conditions described herein the machine shall not emit materials hazardous to the ecological system as prohibited by federal, state or local statutes in effect at the point of installation. ", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
-          ]
-        },
-        { id: "sec-3", number: "3.0", title: "Written Submittals", content: "", lockEdit: true, lockDelete: true, lockAddTable: false, lockAddSections: true, tables: [], children: [] },
-        { id: "sec-4", number: "4.0", title: "Government Furnished Property and Services", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: false, tables: [], children: [] },
-      ],
-    };
+  // Load template from ?draft= URL param (base64 encoded TemplateData).
+  // Falls back to default blank template. When DB is live this should
+  // load from a template ID in the URL instead.
+  const initialData: TemplateData = useMemo(() => {
+    return DEFAULT_TEMPLATE;
+    
+  }, []);
 
-    const setupParam = searchParams.get("setup");
-    if (setupParam) {
-      try {
-        const setup = JSON.parse(atob(setupParam));
-        if (setup.documentName) base.documentName = setup.documentName;
-        if (setup.title) base.coverPage.title = setup.title;
-        if (setup.projectNumber) { base.coverPage.projectNumber = setup.projectNumber; base.headerFooter.footerLeft = setup.projectNumber; }
-        if (setup.clientName) base.coverPage.clientName = setup.clientName;
-        if (setup.building) base.coverPage.building = setup.building;
-        if (setup.location) base.coverPage.location = setup.location;
-        if (setup.preparedBy) base.coverPage.preparedBy = setup.preparedBy;
-        if (setup.department) base.coverPage.department = setup.department;
-        if (setup.date) {
-          base.coverPage.date = setup.date;
-          const d = new Date(setup.date + "T00:00:00");
-          const formatted = d.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" });
-          base.headerFooter.headerLeft = `${setup.title || "Statement of Work"}\n${formatted}`;
-        }
-        if (setup.confidentiality) base.coverPage.confidentiality = setup.confidentiality;
-        if (setup.description) base.sections[0].content = setup.description;
-      } catch { /* use defaults */ }
-    }
-
-    return base;
-  }, [searchParams]);
-
-  const [data, setData] = useState<TemplateData>(defaultData); // Primary document state — all edits call setData with functional updates to avoid stale closures
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(defaultData.sections.map(s => s.id))); // Tracks which section IDs are expanded in the left navigator
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [editedName, setEditedName] = useState(defaultData.documentName);
-  const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null); // Tracks which section is currently selected — drives ribbon button state
-
-  // Blank insertion form state
-  const [showBlankForm, setShowBlankForm] = useState(false);
-  const [blankLabel, setBlankLabel] = useState("");
-  const [blankType, setBlankType] = useState<FieldType>("text");
-  const [blankPlaceholder, setBlankPlaceholder] = useState("");
-  const [blankRequired, setBlankRequired] = useState(false);
-
-  // Blank editing state
-  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
-
-  const selectedSection = selectedSectionId ? findSection(data.sections, selectedSectionId) : null;
-
-  // DnD sensors - PointerSensor requires 5px movement before activating to avoid accidental drags
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(KeyboardSensor)
+  // Template structure - engineers cannot change this, only their content edits and field values
+  const [data, setData] = useState<TemplateData>(initialData);// Navigator expand/collapse state
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(
+    new Set(initialData.sections.map(s => s.id))
   );
 
-  // Shorthand updaters for cover page and header/footer fields
-  const updateCover = (k: keyof typeof data.coverPage, v: string) =>
-    setData(p => ({ ...p, coverPage: { ...p.coverPage, [k]: v } }));
-  const updateHF = (k: keyof HeaderFooterData, v: string) =>
-    setData(p => ({ ...p, headerFooter: { ...p.headerFooter, [k]: v } }));
+
+  
+  useEffect(() => {
+    const draftParam = searchParams.get("draft");
+
+    async function syncWithDb() {
+      try {
+        const dbData = await getGlobalTemplate();
+        
+        // Only update if we actually got a valid object back
+        if (dbData) {
+          setData(dbData as TemplateData);
+
+          if (draftParam) {
+            const parsedData = JSON.parse(atob(draftParam));
+            setData((prevData) => ({
+            ...prevData, // Copy all existing data
+            documentName: parsedData.documentName, // Override name
+            coverPage: { 
+              ...prevData.coverPage, // Keep other cover page fields (title, date, version, confidentiality)
+              clientName: parsedData.clientName,
+              building: parsedData.building,
+              location: parsedData.location,
+              preparedBy: parsedData.preparedBy,
+              department: parsedData.department,
+            },
+          }));}
+          
+          // Sync UI states that depend on the data structure
+          setExpandedIds(new Set((dbData as TemplateData).sections.map(s => s.id)));
+          // setEditedName((dbData as TemplateData).documentName);
+        }
+      } catch (error) {
+        // If DB fails, we do nothing; 'data' remains 'defaultData'
+        console.error("Database fetch failed, continuing with defaults:", error);
+      }
+    }
+
+    syncWithDb();
+  }, [searchParams]); // Run once on mount
+
+
+  // useEffect(() => {
+  // const draftParam = searchParams.get("draft");
+  // if (draftParam) {
+  //   try {
+  //     // Decode and parse the base64 JSON
+  //     const parsedData = JSON.parse(atob(draftParam));
+  //     console.log("Loaded draft data from URL:", parsedData);
+  //     if (parsedData) {
+  //       setData((prevData) => ({
+  //         ...prevData, // Copy all existing data
+  //         documentName: parsedData.documentName, // Override name
+  //         coverPage: { 
+  //           ...prevData.coverPage, // Keep other cover page fields (title, date, version, confidentiality)
+  //           clientName: parsedData.clientName,
+  //           building: parsedData.building,
+  //           location: parsedData.location,
+  //           preparedBy: parsedData.preparedBy,
+  //           department: parsedData.department,
+  //         },
+  //       }));
+  //       }
+  //     } catch (e) {
+  //       console.error("Failed to parse draft param:", e);
+  //     }
+  //   }
+  // }, [searchParams]); // Correctly triggers when URL changes
+
+  // Field values - maps field ID to the string the engineer typed in.
+  // Stored separately from the template so we can merge on save.
+  const [fieldValues, setFieldValues] = useState<Record<string, string>>(() => {
+    const initial: Record<string, string> = {};
+    initialData.fields.forEach(f => { if (f.defaultValue) initial[f.id] = f.defaultValue; });
+    return initial;
+  });
+
+  
+
+  // Active question index for the questionnaire bar.
+  // When the engineer moves to a new question the document scrolls to that section.
+  const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
+
+  // Ordered list of questions derived from the section tree and fields array.
+  // Recomputed whenever data changes (e.g. after loading a new draft).
+  const questions = useMemo(() => buildQuestionList(data.sections, data.fields), [data.sections, data.fields]);
+
+  // Scrolls to the section containing the active question so the engineer
+  // can see where the blank lives in the document while answering in the bar.
+  function handleChangeQuestionIndex(index: number) {
+    setActiveQuestionIndex(index);
+    const question = questions[index];
+    if (question) {
+      document.getElementById(question.sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  }
+
   function toggleExpand(id: string) {
     setExpandedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
   }
 
-  // Save / Load / Export
-  // handleSave serializes state to JSON and triggers a browser file download — no server involved
+  // Updates an unlocked section's content text
+  function handleChangeContent(sectionId: string, value: string) {
+    setData(p => ({ ...p, sections: updateSectionContent(p.sections, sectionId, value) }));
+  }
+
+  // Updates a single field value the engineer typed into a blank
+  function handleChangeField(fieldId: string, value: string) {
+    setFieldValues(prev => ({ ...prev, [fieldId]: value }));
+  }
+
+  // Saves a draft by merging field values back into the template fields
+  // and downloading the result as a JSON file the engineer can reload later.
+  // This is a temporary testing tool - will be removed once export to Word is the primary output.
   function handleSave() {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    const merged: TemplateData = {
+      ...data,
+      fields: data.fields.map(f => ({
+        ...f,
+        defaultValue: fieldValues[f.id] ?? f.defaultValue,
+      })),
+    };
+    const blob = new Blob([JSON.stringify(merged, null, 2)], { type: "application/json" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.json`;
-    a.click(); URL.revokeObjectURL(url);
+    a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}-draft-${new Date().toISOString().split("T")[0]}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  // Exports the completed SOW as a Word document via the FastAPI docx service.
+  // Merges fieldValues into fields[].defaultValue before sending so the Python
+  // service receives a complete document with all engineer answers baked in.
+  const [exporting, setExporting] = useState(false);
+
+  async function handleExport() {
+    setExporting(true);
+    try {
+      const merged: TemplateData = {
+        ...data,
+        fields: data.fields.map(f => ({
+          ...f,
+          defaultValue: fieldValues[f.id] ?? f.defaultValue,
+        })),
+      };
+
+      const response = await fetch("/api/export", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(merged),
+      });
+
+      if (!response.ok) {
+        const err = await response.json();
+        alert(`Export failed: ${err.error ?? "Unknown error"}`);
+        return;
+      }
+
+      // Trigger browser download of the returned .docx file
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}.docx`;
+      a.click();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      alert("Export failed - make sure the document service is running.");
+    } finally {
+      setExporting(false);
+    }
   }
 
   // handleLoadJSON opens a file picker, reads the JSON file, and replaces the current document
@@ -802,9 +987,7 @@ function SowEditPageInner() {
     );
   }
 
-  // ── Nav rendering ──
-  // Renders the left panel section list with drag-and-drop support.
-  // Clicking selects a section and smooth-scrolls to it on the document page.
+  // Renders the left navigator panel - click to scroll, expand/collapse
   function renderNav(sections: SectionNode[], depth = 0): React.ReactNode {
     return (
       <SortableContext items={sections.map(s => s.id)} strategy={verticalListSortingStrategy}>
@@ -834,8 +1017,7 @@ function SowEditPageInner() {
       <SidebarInset className="flex flex-col h-screen overflow-hidden">
         <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4 bg-background sticky top-0 z-10">
           <div className="flex items-center gap-2">
-            <SidebarMenuButton size="lg" asChild>
-              <a href="/new">
+            <a href="/">
                 <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
                   <Plane className="size-4" />
                 </div>
@@ -848,193 +1030,78 @@ function SowEditPageInner() {
                   </span>
                 </div>
               </a>
-            </SidebarMenuButton>
-            {/* Slim header — just sidebar trigger + doc name */}
             <SidebarTrigger className="-ml-1" />
             <FileText className="h-4 w-4 text-primary" />
-            {isEditingName ? (
-              <div className="flex items-center gap-1">
-                <Input autoFocus value={editedName} onChange={e => setEditedName(e.target.value)} className="h-7 w-52 text-sm"
-                  onKeyDown={e => { if (e.key === "Enter") { setData(p => ({ ...p, documentName: editedName })); setIsEditingName(false); } if (e.key === "Escape") { setEditedName(data.documentName); setIsEditingName(false); } }} />
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setData(p => ({ ...p, documentName: editedName })); setIsEditingName(false); }}>Save</Button>
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditedName(data.documentName); setIsEditingName(false); }}>Cancel</Button>
-              </div>
-            ) : (
-              <div className="flex items-center gap-1">
-                <span className="text-sm font-semibold">{data.documentName}</span>
-                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setIsEditingName(true)}><Edit2 className="h-3 w-3" /></Button>
-              </div>
-            )}
+            <span className="text-sm font-semibold">{data.documentName}</span>
           </div>
-          <div className="text-xs text-muted-foreground">
-            {data.fields.length} blank{data.fields.length !== 1 ? "s" : ""} · {data.sections.length} section{data.sections.length !== 1 ? "s" : ""}
+          <div className="flex items-center gap-3">
+            <Button variant="outline" size="sm" onClick={handleLoad}>
+              <Download className="h-4 w-4 mr-1" /> Load Draft
+            </Button>
+            <Button variant="outline" size="sm" onClick={handleSave}>
+              <Save className="h-4 w-4 mr-1" /> Save Draft
+            </Button>
+            <Button size="sm" onClick={handleExport} disabled={exporting}>
+              <FileDown className="h-4 w-4 mr-1" />
+              {exporting ? "Exporting..." : "Export Word"}
+            </Button>
           </div>
         </header>
 
+        {/* Questionnaire bar - sits below the main header, above the document */}
+        {questions.length > 0 && (
+          <QuestionnaireBar
+            questions={questions}
+            activeIndex={activeQuestionIndex}
+            fieldValues={fieldValues}
+            onChangeField={handleChangeField}
+            onChangeIndex={handleChangeQuestionIndex}
+          />
+        )}
+
+        {/* Body */}
         <div className="flex flex-1 overflow-hidden">
+
           {/* Left: section navigator */}
-          <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
-            <div className="w-60 border-r shrink-0 flex flex-col overflow-hidden">
-              <div className="px-3 py-2 border-b flex items-center gap-2 shrink-0 bg-background">
-                <ListOrdered className="h-4 w-4 text-primary" />
-                <span className="text-sm font-semibold">Sections</span>
-              </div>
-              <div className="p-2 space-y-0.5 overflow-y-auto flex-1">{renderNav(data.sections)}</div>
+          <div className="w-60 border-r shrink-0 flex flex-col overflow-hidden">
+            <div className="px-3 py-2 border-b flex items-center gap-2 shrink-0 bg-background">
+              <span className="text-sm font-semibold">Sections</span>
             </div>
-
-            {/* Right: ribbon + document pages */}
-            <div className="flex-1 flex flex-col overflow-hidden">
-              {/* ── Frosted Editing Ribbon ── */}
-              {/* Sticky toolbar above the document. Groups: File, Insert, Lock, Delete. */}
-              {/* Buttons requiring a selection are disabled when selectedSection is null. */}
-              <div className="editor-ribbon sticky top-0 z-30 px-3 py-1.5 flex items-center gap-1 shrink-0">
-                {/* File group */}
-                <RibbonBtn icon={Save} label="Save" onClick={handleSave} />
-                <RibbonBtn icon={Download} label="Load" onClick={handleLoadJSON} />
-                <div className="ribbon-divider" />
-
-                {/* Insert group */}
-                {/* <RibbonBtn icon={Plus} label="Section" onClick={() => setData(p => ({
-                  ...p, sections: renumberSections([...p.sections, { id: `sec-${Date.now()}`, number: "", title: "New Section", content: "", locked: true, tables: [], children: [] }])
-                }))} />
-                <RibbonBtn icon={Plus} label="Sub" disabled={!selectedSection}
-                  onClick={() => {
-                    if (!selectedSectionId) return;
-                    setData(p => ({ ...p, sections: renumberSections(addChildSection(p.sections, selectedSectionId)) }));
-                    setExpandedIds(p => new Set([...p, selectedSectionId]));
-                  }} />
-                <RibbonBtn icon={PlusCircle} label="Blank" disabled={!selectedSection}
-                  onClick={() => setShowBlankForm(true)} />
-                <div className="ribbon-divider" /> */}
-
-                {/* Lock group */}
-                {/* <RibbonBtn icon={selectedSection?.locked ? Lock : Unlock}
-                  label={selectedSection?.locked ? "Locked" : "Unlocked"}
-                  active={selectedSection?.locked}
-                  disabled={!selectedSection}
-                  onClick={() => {
-                    if (!selectedSectionId) return;
-                    setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { locked: !selectedSection?.locked }) }));
-                  }} />
-                <div className="ribbon-divider" /> */}
-
-                {/* Delete */}
-                {/* <RibbonBtn icon={Trash2} label="Delete" danger disabled={!selectedSection || data.sections.length === 1}
-                  onClick={() => {
-                    if (!selectedSectionId || !confirm("Delete this section?")) return;
-                    setData(p => ({ ...p, sections: renumberSections(deleteSection(p.sections, selectedSectionId)) }));
-                    setSelectedSectionId(null);
-                  }} /> */}
-
-                {/* Spacer */}
-                <div className="flex-1" />
-
-                {/* Selected section indicator */}
-                {selectedSection && (
-                  <div className="text-xs text-muted-foreground flex items-center gap-1">
-                    <span className="font-mono">{selectedSection.number}</span>
-                    <span className="truncate max-w-[200px]">{selectedSection.title}</span>
-                  </div>
-                )}
-              </div>
-
-              {/* ── Insert Blank Form (shown below ribbon) ── */}
-              {showBlankForm && (
-                <div className="bg-muted/50 border-b px-4 py-3 flex items-end gap-3 shrink-0">
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Label *</label>
-                    <Input value={blankLabel} onChange={e => setBlankLabel(e.target.value)} placeholder="e.g. Project Name" className="h-8 w-40 text-sm" autoFocus />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Type</label>
-                    <select value={blankType} onChange={e => setBlankType(e.target.value as FieldType)}
-                      className="h-8 rounded border border-input bg-background px-2 text-sm">
-                      {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Placeholder</label>
-                    <Input value={blankPlaceholder} onChange={e => setBlankPlaceholder(e.target.value)} placeholder="Hint text..." className="h-8 w-32 text-sm" />
-                  </div>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                    <input type="checkbox" checked={blankRequired} onChange={e => setBlankRequired(e.target.checked)} className="rounded" />
-                    Required
-                  </label>
-                  <Button size="sm" className="h-8 gap-1" onClick={handleInsertBlank} disabled={!blankLabel.trim()}>
-                    <Check className="h-3 w-3" /> Insert
-                  </Button>
-                  <Button size="sm" variant="ghost" className="h-8" onClick={() => setShowBlankForm(false)}>
-                    <X className="h-3 w-3" />
-                  </Button>
-                </div>
+            <div className="p-2 space-y-0.5 overflow-y-auto flex-1">
+              {data.sections.length === 0 ? (
+                <p className="text-xs text-muted-foreground px-2 py-2">No sections loaded.</p>
+              ) : (
+                renderNav(data.sections)
               )}
+            </div>
+          </div>
 
-              {/* ── Edit Blank Properties (shown below ribbon when editing a blank) ── */}
-              {editingField && (
-                <div className="bg-blue-50/50 dark:bg-blue-950/20 border-b px-4 py-3 flex items-end gap-3 shrink-0">
-                  <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 mr-2">
-                    Editing blank:
-                    <span className="blank-chip" data-type={editingField.type} style={{ cursor: "default" }}>
-                      {editingField.label} ({editingField.type})
-                    </span>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Label</label>
-                    <Input value={editingField.label} onChange={e => handleUpdateField(editingField.id, { label: e.target.value })} className="h-8 w-32 text-sm" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Type</label>
-                    <select value={editingField.type} onChange={e => handleUpdateField(editingField.id, { type: e.target.value as FieldType })}
-                      className="h-8 rounded border border-input bg-background px-2 text-sm">
-                      {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Placeholder</label>
-                    <Input value={editingField.placeholder || ""} onChange={e => handleUpdateField(editingField.id, { placeholder: e.target.value })} className="h-8 w-32 text-sm" />
-                  </div>
-                  <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Default</label>
-                    <Input value={editingField.defaultValue || ""} onChange={e => handleUpdateField(editingField.id, { defaultValue: e.target.value })} className="h-8 w-32 text-sm" />
-                  </div>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                    <input type="checkbox" checked={editingField.required ?? false} onChange={e => handleUpdateField(editingField.id, { required: e.target.checked })} className="rounded" />
-                    Required
-                  </label>
-                  <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditingFieldId(null)}>
-                    <X className="h-3 w-3" /> Close
-                  </Button>
-                </div>
-              )}
+          {/* Right: document pages */}
+          <div className="flex-1 overflow-y-auto bg-gray-200 p-8">
+            <div className="space-y-8">
 
-              {/* ── Document pages ── */}
-              <div className="flex-1 overflow-y-auto bg-gray-200 p-8" onClick={() => setSelectedSectionId(null)}>
-                <div className="space-y-8">
-                  {/* Cover Page — all fields are EditableText components connected to coverPage state */}
-                  <div className="bg-white shadow-lg mx-auto relative text-black" style={{ width: "8.5in", height: "11in" }}>
-                    <div className="absolute inset-8 border-4 border-black pointer-events-none" />
-                    <div className="absolute inset-8 flex items-center justify-center">
-                      <div className="text-center w-full px-12">
-                        <EditableText value={data.coverPage.title} onChange={v => updateCover("title", v)} className="text-4xl font-bold" placeholder="SOW Title" />
-
-                        <p className="text-3xl font-semibold mt-6 select-none">FOR</p>
-                        <EditableText value={data.coverPage.clientName} onChange={v => updateCover("clientName", v)} className="text-4xl font-bold mt-4" placeholder="Product Name" />
-                            
-                        <div className="flex items-baseline justify-center gap-2 mt-10">
-                          <span className="text-3xl font-semibold select-none">BUILDING</span>
-                          <EditableText value={data.coverPage.building} onChange={v => updateCover("building", v)} className="text-3xl font-semibold" placeholder="#" />
-                        </div>
-
-                        <div className="mt-16 space-y-3">
-                          <EditableText value={data.coverPage.location} onChange={v => updateCover("location", v)} className="text-xl" placeholder="Location" />
-                          <p className="text-lg font-semibold mt-10 select-none">Prepared by</p>
-                          <EditableText value={data.coverPage.preparedBy} onChange={v => updateCover("preparedBy", v)} className="text-xl" placeholder="Name" />
-                          <EditableText value={data.coverPage.department} onChange={v => updateCover("department", v)} className="text-xl" placeholder="Team / Department" />
-                          <EditableText value={data.coverPage.date} onChange={v => updateCover("date", v)} className="text-xl mt-2" placeholder="Date" />
-                        </div>
-                      </div>
+              {/* Cover page - read-only for engineers */}
+              <div className="bg-white shadow-lg mx-auto relative text-black" style={{ width: "8.5in", height: "11in" }}>
+                <div className="absolute inset-8 border-4 border-black pointer-events-none" />
+                <div className="absolute inset-8 flex items-center justify-center">
+                  <div className="text-center w-full px-12">
+                    <p className="text-4xl font-bold">{data.coverPage.title}</p>
+                    <p className="text-3xl font-semibold mt-6">FOR</p>
+                    <p className="text-4xl font-bold mt-4">{data.coverPage.clientName || "-"}</p>
+                    <div className="flex items-baseline justify-center gap-2 mt-4">
+                      <span className="text-3xl font-semibold">BUILDING</span>
+                      <span className="text-3xl font-semibold">{data.coverPage.building || "-"}</span>
+                    </div>
+                    <div className="mt-16 space-y-3">
+                      <p className="text-xl">{data.coverPage.location || "-"}</p>
+                      <p className="text-lg font-semibold mt-4">Prepared by</p>
+                      <p className="text-xl">{data.coverPage.preparedBy || "-"}</p>
+                      <p className="text-xl">{data.coverPage.department || "-"}</p>
+                      <p className="text-xl mt-2">{data.coverPage.date}</p>
                     </div>
                   </div>
+                </div>
+              </div>
 
                   {/* Table of Contents — auto-generated from tocData, not directly editable */}
                   <DocumentPage hf={data.headerFooter} onHF={updateHF} pageNumber={2}>
@@ -1053,14 +1120,20 @@ function SowEditPageInner() {
                     </div>
                   </DocumentPage>
 
-                  {/* Section Content — locked sections shown read-only, unlocked sections editable */}
-                  <DocumentPage hf={data.headerFooter} onHF={updateHF} pageNumber={3}>
-                    {renderSections(data.sections)}
-                  </DocumentPage>
-                </div>
-              </div>
+              {/* Section content */}
+              <DocumentPage hf={data.headerFooter} pageNumber={3}>
+                {data.sections.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center h-64 text-center gap-2">
+                    <p className="text-sm text-muted-foreground">No sections loaded.</p>
+                    <p className="text-xs text-muted-foreground">Load a saved draft using the button in the toolbar.</p>
+                  </div>
+                ) : (
+                  renderSections(data.sections)
+                )}
+              </DocumentPage>
+
             </div>
-          </DndContext>
+          </div>
         </div>
       </SidebarInset>
     </SidebarProvider>

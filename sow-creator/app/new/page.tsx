@@ -133,7 +133,7 @@ export default function NewSOWPage() {
     };
 
     const encoded = btoa(JSON.stringify(setupData));
-    router.push(`/sow?setup=${encoded}`);
+    router.push(`/sow?draft=${encoded}`);
   }
 
   // Determine which step we're on based on filled fields
