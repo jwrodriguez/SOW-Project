@@ -20,6 +20,8 @@ import { Input } from "@/components/ui/input";
 import { useSession } from "@/lib/auth-client";
 import { SidebarMenuButton } from "@/components/ui/sidebar";
 import { Plane } from "lucide-react";
+import { Document, Packer, Paragraph, HeadingLevel } from "docx";
+import { saveAs } from "file-saver";
 
 import {
   Plus, Trash2, Download, Save, FileText, ChevronRight, ChevronDown,
@@ -687,9 +689,36 @@ function SowEditPageInner() {
   }
 
   // handleExport is a placeholder — planned: Next.js API → sanitize → Flask → python-docx → .docx download
-  function handleExport() {
-    alert("Export to Word will generate a .docx file. Backend integration coming soon!");
+  async function handleExport() {
+  const res = await fetch("http://127.0.0.1:8000/generate", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    console.error("Export failed");
+    return;
   }
+
+  const blob = await res.blob();
+
+  const url = window.URL.createObjectURL(blob);
+  const a = document.createElement("a");
+
+  a.href = url;
+  a.download = `${data.documentName || "document"}.docx`;
+
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+  
+    
 
   // ── Insert Blank ──
   // Creates a new TemplateField, appends its {{fieldId}} token to the selected section's content,
@@ -891,6 +920,7 @@ function SowEditPageInner() {
                 {/* File group */}
                 <RibbonBtn icon={Save} label="Save" onClick={handleSave} />
                 <RibbonBtn icon={Download} label="Load" onClick={handleLoadJSON} />
+                <RibbonBtn icon={Download} label="Export to Word" onClick={handleExport} />
                 <div className="ribbon-divider" />
 
                 {/* Insert group */}
