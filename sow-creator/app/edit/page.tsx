@@ -11,7 +11,7 @@
  */
 "use client";
 
-import React, { Suspense, useMemo, useState, useEffect} from "react";
+import React, { Suspense, useMemo, useState, useEffect, startTransition} from "react";
 import { useSearchParams } from "next/navigation";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -36,6 +36,8 @@ import { CSS } from "@dnd-kit/utilities";
 // ============= TYPES =============
 // You can find Type Declarations and Descriptions used in .../types/pageTypes.ts
 import {FieldType, TemplateField, SectionNode, TableData, HeaderFooterData, TemplateData} from "@/types/pageTypes";
+import { getGlobalTemplate } from "@/lib/db-pullTemp";
+import { saveGlobalTemplate } from "@/lib/db-upsert";
 
 // Allowed field types listed here so both the insert form and edit form share the same options
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
@@ -545,7 +547,6 @@ function removeBlankFromContent(sections: SectionNode[], fieldId: string): Secti
 // Split from the default export so useSearchParams() can be wrapped in Suspense (required by Next.js).
 // All document state, blank state, DnD state, and render functions live here.
 function SowEditPageInner() {
-  const searchParams = useSearchParams();
   const router  = useRouter();
 
   // Build initial document state once with useMemo.
@@ -566,7 +567,7 @@ function SowEditPageInner() {
         showPageNumbers: true, pageNumberPosition: "footer-right",
       },
       sections: [
-        { id: "sec-1", number: "1.0", title: "Scope of Work", content: "{{field_additional_scope_details_1776447594151}}", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [],
+        { id: "sec-1", number: "1.0", title: "Scope of Work", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [],
           children: [
             { id: "sec-1-1", number: "1.1", title: "Scope", content: "The following establishes the minimum requirement for the purchase, delivery, and installation of {YOUR PRODUCT}. The contractor should {do these things} and {provide this service}.", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
             { id: "sec-1-2", number: "1.2", title: "Background", content: "The {items to be purchased} are intended to be used at {a location} for {a purpose}. {the items} shoud be delivered to {a location} ", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] },
@@ -588,10 +589,33 @@ function SowEditPageInner() {
     };
 
     return base;
-  }, [searchParams]);
+  }, []);
 
-  const [data, setData] = useState<TemplateData>(defaultData); // Primary document state — all edits call setData with functional updates to avoid stale closures
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(defaultData.sections.map(s => s.id))); // Tracks which section IDs are expanded in the left navigator
+  const [data, setData] = useState<TemplateData>(defaultData);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(defaultData.sections.map(s => s.id)));
+  
+  useEffect(() => {
+    async function syncWithDb() {
+      try {
+        const dbData = await getGlobalTemplate();
+        
+        // Only update if we actually got a valid object back
+        if (dbData) {
+          setData(dbData as TemplateData);
+          
+          // Sync UI states that depend on the data structure
+          setExpandedIds(new Set((dbData as TemplateData).sections.map(s => s.id)));
+          setEditedName((dbData as TemplateData).documentName);
+        }
+      } catch (error) {
+        // If DB fails, we do nothing; 'data' remains 'defaultData'
+        console.error("Database fetch failed, continuing with defaults:", error);
+      }
+    }
+
+    syncWithDb();
+  }, []); // Run once on mount
+  
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(defaultData.documentName);
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null); // Tracks which section is currently selected — drives ribbon button state
@@ -626,13 +650,15 @@ function SowEditPageInner() {
   // Save / Load / Export
   // handleSave serializes state to JSON and triggers a browser file download — no server involved
   function handleSave() {
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}-${new Date().toISOString().split("T")[0]}.json`;
-    a.click(); URL.revokeObjectURL(url);
-  }
+    startTransition(async () => {
+      const result = await saveGlobalTemplate(data);
+      if (result.success) {
+        alert("Template updated successfully!");
+      } else {
+        alert("Error saving template.");
+      }
+    });
+  };
 
   // handleLoadJSON opens a file picker, reads the JSON file, and replaces the current document
   function handleLoadJSON() {
@@ -797,7 +823,7 @@ function SowEditPageInner() {
   const editingField = editingFieldId ? data.fields.find(f => f.id === editingFieldId) : null;
 
   const handleReturnToNewForm = () => {
-    router.push("/login");
+    router.push("/new");
   };
   
 

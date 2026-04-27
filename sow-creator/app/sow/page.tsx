@@ -11,7 +11,7 @@
  */
 "use client";
 
-import React, { Suspense, useMemo, useState} from "react";
+import React, { Suspense, useEffect, useMemo, useState} from "react";
 import { useSearchParams } from "next/navigation";
 // import { AppSidebar } from "@/components/app-sidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -38,6 +38,7 @@ import { CSS } from "@dnd-kit/utilities";
 // ============= TYPES =============
 // You can find Type Declarations and Descriptions used in .../types/pageTypes.ts
 import {FieldType, TemplateField, SectionNode, TableData, HeaderFooterData, TemplateData} from "@/types/pageTypes";
+import { getGlobalTemplate } from "@/lib/db-pullTemp";
 
 // Allowed field types listed here so both the insert form and edit form share the same options
 const FIELD_TYPES: { value: FieldType; label: string }[] = [
@@ -556,8 +557,7 @@ function removeBlankFromContent(sections: SectionNode[], fieldId: string): Secti
 // Split from the default export so useSearchParams() can be wrapped in Suspense (required by Next.js).
 // All document state, blank state, DnD state, and render functions live here.
 function SowEditPageInner() {
-  const searchParams = useSearchParams();
-
+  
   // Build initial document state once with useMemo.
   // If ?setup= param is present (base64 JSON from the /new form), decode and override defaults.
   const defaultData: TemplateData = useMemo(() => {
@@ -565,9 +565,9 @@ function SowEditPageInner() {
       documentName: "SOW ID",
       fields: [],
       coverPage: {
-        title: "Statement of Work", projectNumber: "SOW-2026-001", clientName: "Product Name",
-        building: "3001", location: "Norman, Oklahoma", preparedBy: "Your Name",
-        department: "Department Name", date: new Date().toISOString().split("T")[0],
+        title: "Statement of Work (SOW)", projectNumber: "SOW-2026-001", clientName: "Product Name",
+        building: "{Building}", location: "{Location}", preparedBy: "{Team or Individual}",
+        department: "{Department}", date: new Date().toISOString().split("T")[0],
         version: "1.0", confidentiality: "Confidential",
       },
       headerFooter: {
@@ -597,34 +597,34 @@ function SowEditPageInner() {
       ],
     };
 
-    const setupParam = searchParams.get("setup");
-    if (setupParam) {
+    return base;
+  }, []);
+
+  const [data, setData] = useState<TemplateData>(defaultData);
+  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(defaultData.sections.map(s => s.id)));
+  
+  useEffect(() => {
+    async function syncWithDb() {
       try {
-        const setup = JSON.parse(atob(setupParam));
-        if (setup.documentName) base.documentName = setup.documentName;
-        if (setup.title) base.coverPage.title = setup.title;
-        if (setup.projectNumber) { base.coverPage.projectNumber = setup.projectNumber; base.headerFooter.footerLeft = setup.projectNumber; }
-        if (setup.clientName) base.coverPage.clientName = setup.clientName;
-        if (setup.building) base.coverPage.building = setup.building;
-        if (setup.location) base.coverPage.location = setup.location;
-        if (setup.preparedBy) base.coverPage.preparedBy = setup.preparedBy;
-        if (setup.department) base.coverPage.department = setup.department;
-        if (setup.date) {
-          base.coverPage.date = setup.date;
-          const d = new Date(setup.date + "T00:00:00");
-          const formatted = d.toLocaleDateString("en-US", { day: "numeric", month: "long", year: "numeric" });
-          base.headerFooter.headerLeft = `${setup.title || "Statement of Work"}\n${formatted}`;
+        const dbData = await getGlobalTemplate();
+        
+        // Only update if we actually got a valid object back
+        if (dbData) {
+          setData(dbData as TemplateData);
+          
+          // Sync UI states that depend on the data structure
+          setExpandedIds(new Set((dbData as TemplateData).sections.map(s => s.id)));
+          setEditedName((dbData as TemplateData).documentName);
         }
-        if (setup.confidentiality) base.coverPage.confidentiality = setup.confidentiality;
-        if (setup.description) base.sections[0].content = setup.description;
-      } catch { /* use defaults */ }
+      } catch (error) {
+        // If DB fails, we do nothing; 'data' remains 'defaultData'
+        console.error("Database fetch failed, continuing with defaults:", error);
+      }
     }
 
-    return base;
-  }, [searchParams]);
-
-  const [data, setData] = useState<TemplateData>(defaultData); // Primary document state — all edits call setData with functional updates to avoid stale closures
-  const [expandedIds, setExpandedIds] = useState<Set<string>>(new Set(defaultData.sections.map(s => s.id))); // Tracks which section IDs are expanded in the left navigator
+    syncWithDb();
+  }, []); // Run once on mount
+    
   const [isEditingName, setIsEditingName] = useState(false);
   const [editedName, setEditedName] = useState(defaultData.documentName);
   const [selectedSectionId, setSelectedSectionId] = useState<string | null>(null); // Tracks which section is currently selected — drives ribbon button state
@@ -860,9 +860,9 @@ function SowEditPageInner() {
                 <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => { setEditedName(data.documentName); setIsEditingName(false); }}>Cancel</Button>
               </div>
             ) : (
-              <div className="flex items-center gap-1">
-                <span className="text-sm font-semibold">{data.documentName}</span>
-                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setIsEditingName(true)}><Edit2 className="h-3 w-3" /></Button>
+              <div className="flex items-center gap-1 flex-nowrap">
+                <span className="text-sm font-semibold truncate shrink-0">{data.documentName}</span>
+                <Button size="sm" variant="ghost" className="h-6 w-6 p-0 shrink-0" onClick={() => setIsEditingName(true)}><Edit2 className="h-3 w-3" /></Button>
               </div>
             )}
           </div>
@@ -890,7 +890,7 @@ function SowEditPageInner() {
               <div className="editor-ribbon sticky top-0 z-30 px-3 py-1.5 flex items-center gap-1 shrink-0">
                 {/* File group */}
                 <RibbonBtn icon={Save} label="Save" onClick={handleSave} />
-                <RibbonBtn icon={Download} label="Load" onClick={handleLoadJSON} />
+                {/* <RibbonBtn icon={Download} label="Load" onClick={handleLoadJSON} /> */}
                 <div className="ribbon-divider" />
 
                 {/* Insert group */}
