@@ -42,9 +42,22 @@ class SectionNode(BaseModel):
     number: str
     title: str
     content: str
-    locked: bool
+    # Support both the old single 'locked' field and the new granular lock fields.
+    # If 'locked' is absent (new schema), derive it from lockEdit.
+    locked: Optional[bool] = None
+    lockEdit: Optional[bool] = None
+    lockDelete: Optional[bool] = None
+    lockAddTable: Optional[bool] = None
+    lockAddSections: Optional[bool] = None
     tables: Optional[list[TableData]] = []
     children: Optional[list["SectionNode"]] = []
+
+    @property
+    def is_locked(self) -> bool:
+        """True if content is locked — works with both old and new schema."""
+        if self.locked is not None:
+            return self.locked
+        return bool(self.lockEdit)
 
 # Required for self-referential Pydantic model (children: list[SectionNode])
 SectionNode.model_rebuild()
