@@ -108,13 +108,6 @@ export const verification = pgTable(
 
 // ─── Auth Relations ─────────────────────────────────────────────────────────
 
-export const userRelations = relations(user, ({ many }) => ({
-  sessions: many(session),
-  accounts: many(account),
-  sows: many(sows),
-  templates: many(templates),
-}));
-
 export const sessionRelations = relations(session, ({ one }) => ({
   user: one(user, {
     fields: [session.userId],
@@ -131,80 +124,23 @@ export const accountRelations = relations(account, ({ one }) => ({
 
 // ─── Application Tables ────────────────────────────────────────────────────
 
-// Full editor state (sections, blanks, cover page, etc.) stored as JSONB.
-export const sows = pgTable("sow", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  title: text("title").notNull(),
-  content: jsonb("content").notNull(),
-  status: text("status").notNull().default("DRAFT"),
-  ownerId: uuid("owner_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-});
 
 // Reusable starting points for SOWs. `icon` and `color` reference
 // the design token registry in lib/template-styles.ts.
-export const templates = pgTable("template", {
+export const template = pgTable("template", {
   id: uuid("id").defaultRandom().primaryKey(),
   name: text("name").notNull(),
-  description: text("description"),
   content: jsonb("content").notNull(),
   tags: text("tags").array().notNull().default([]),
   icon: text("icon").notNull().default("file"),
   color: text("color").notNull().default("blue"),
-  isShared: boolean("is_shared").notNull().default(false),
-  ownerId: uuid("owner_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
 
-// Per-user sharing. `isShared` on template = global visibility;
-// rows here = explicit access for specific users.
-export const templateShares = pgTable("template_share", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  templateId: uuid("template_id")
-    .notNull()
-    .references(() => templates.id, { onDelete: "cascade" }),
-  sharedWithUserId: uuid("shared_with_user_id")
-    .notNull()
-    .references(() => user.id, { onDelete: "cascade" }),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
 
 // ─── Application Relations ──────────────────────────────────────────────────
 
-export const sowsRelations = relations(sows, ({ one }) => ({
-  owner: one(user, {
-    fields: [sows.ownerId],
-    references: [user.id],
-  }),
-}));
-
-export const templatesRelations = relations(templates, ({ one, many }) => ({
-  owner: one(user, {
-    fields: [templates.ownerId],
-    references: [user.id],
-  }),
-  shares: many(templateShares),
-}));
-
-export const templateSharesRelations = relations(
-  templateShares,
-  ({ one }) => ({
-    template: one(templates, {
-      fields: [templateShares.templateId],
-      references: [templates.id],
-    }),
-    sharedWithUser: one(user, {
-      fields: [templateShares.sharedWithUserId],
-      references: [user.id],
-    }),
-  }),
-);
-
 // Better Auth uses singular `user`, some of our code uses `users`.
 export const users = user;
+export const TEMPLATE = template;

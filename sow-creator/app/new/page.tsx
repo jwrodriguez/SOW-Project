@@ -1,8 +1,12 @@
 "use client";
 
+
+import { useSession } from "@/lib/auth-client";
+import { NavUser } from "@/components/nav-user";
+
+
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { AppSidebar } from "@/components/app-sidebar";
 import {
   SidebarInset,
   SidebarProvider,
@@ -94,7 +98,7 @@ export default function NewSOWPage() {
 
   // All fields that the edit page reads from the setup param
   const [documentName, setDocumentName] = useState("");
-  const [title, setTitle] = useState("Statement of Work");
+  const [title, setTitle] = useState("Statement of Work (SOW)");
   const [projectNumber, setProjectNumber] = useState(generateProjectNumber);
   const [clientName, setClientName] = useState("");
   const [building, setBuilding] = useState("");
@@ -129,25 +133,50 @@ export default function NewSOWPage() {
     };
 
     const encoded = btoa(JSON.stringify(setupData));
-    router.push(`/edit?setup=${encoded}`);
+    router.push(`/sow?draft=${encoded}`);
   }
 
   // Determine which step we're on based on filled fields
   const step: 1 | 2 | 3 = preparedBy || department || date !== today ? 3 : clientName || building || location ? 2 : 1;
 
+
+  const { data: sessionData, isPending } = useSession();
+  const user = sessionData?.user
+  ? {
+      name: sessionData.user.name ?? "User",
+      email: sessionData.user.email ?? "",
+      avatar: sessionData.user.image ?? "",
+    }
+  : null;
+
+
+  const handleEditForm = async () => {
+      router.push("/edit");
+    };
+
+
   return (
     <SidebarProvider>
-      <AppSidebar />
       <SidebarInset className="flex flex-col h-screen overflow-hidden">
         {/* Header */}
         <header className="flex h-14 shrink-0 items-center gap-2 border-b px-4 bg-background sticky top-0 z-10">
-          <SidebarTrigger className="-ml-1" />
           <div className="flex items-center gap-2">
             <FilePlus className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold">New Statement of Work</span>
           </div>
-        </header>
 
+          {/* This pushes everything after it to the right */}
+          <div className="flex-1" />
+
+          <div className="flex items-center gap-2">
+            <span> 
+              <button onClick={handleEditForm} className="hover:underline text-sm">
+                Edit Form
+              </button> 
+            </span>
+            <span> {user ? <NavUser user={user} /> : null} </span>
+          </div>
+        </header>
         {/* Scrollable content */}
         <div className="flex-1 overflow-y-auto bg-muted/20">
           <div className="max-w-2xl mx-auto py-10 px-6">
@@ -179,8 +208,7 @@ export default function NewSOWPage() {
                     Document Information
                   </CardTitle>
                   <CardDescription>
-                    Give your document a name and set the SOW title and project
-                    number.
+                    Give your document a name and set the project number.
                   </CardDescription>
                 </CardHeader>
                 <CardContent className="space-y-4">
@@ -198,13 +226,12 @@ export default function NewSOWPage() {
                       autoFocus
                     />
                     <p className="text-xs text-muted-foreground">
-                      This is how the document appears in your project list and
-                      becomes the save filename.
+                      This is the saved filename.
                     </p>
                   </div>
 
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-2">
+                    {/* <div className="space-y-2">
                       <Label htmlFor="title">SOW Title</Label>
                       <Input
                         id="title"
@@ -212,7 +239,10 @@ export default function NewSOWPage() {
                         value={title}
                         onChange={(e) => setTitle(e.target.value)}
                       />
-                    </div>
+                      <p className="text-xs text-muted-foreground">
+                        This should be unique.
+                      </p>
+                    </div> */}
                     <div className="space-y-2">
                       <Label
                         htmlFor="projectNumber"
@@ -226,6 +256,9 @@ export default function NewSOWPage() {
                         value={projectNumber}
                         onChange={(e) => setProjectNumber(e.target.value)}
                       />
+                      <p className="text-xs text-muted-foreground">
+                        This should be unique.
+                      </p>
                     </div>
                   </div>
 
@@ -233,7 +266,7 @@ export default function NewSOWPage() {
                     <Label htmlFor="description">Description</Label>
                     <Textarea
                       id="description"
-                      placeholder="Optional — brief summary of this SOW's purpose. Seeds the Project Overview section in the editor."
+                      placeholder="Optional — brief summary of this SOW's purpose. This is the 'Project Overview' section in the sow editor."
                       value={description}
                       onChange={(e) => setDescription(e.target.value)}
                       rows={3}
@@ -258,10 +291,10 @@ export default function NewSOWPage() {
                 </CardHeader>
                 <CardContent className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="clientName">Client / Product Name</Label>
+                    <Label htmlFor="clientName">Product Name</Label>
                     <Input
                       id="clientName"
-                      placeholder="e.g. F-16 Block 50 Avionics Suite"
+                      placeholder="e.g. Universal Fuel Accessories Test Stand (UFATS)"
                       value={clientName}
                       onChange={(e) => setClientName(e.target.value)}
                     />
@@ -325,7 +358,7 @@ export default function NewSOWPage() {
                       </Label>
                       <Input
                         id="preparedBy"
-                        placeholder="Your Name"
+                        placeholder="Your Name or Group Name"
                         value={preparedBy}
                         onChange={(e) => setPreparedBy(e.target.value)}
                       />
