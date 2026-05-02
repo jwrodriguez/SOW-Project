@@ -113,11 +113,12 @@ const DEFAULT_TEMPLATE: TemplateData = {
 // Represents one question in the questionnaire bar - a blank field with
 // the section context it belongs to so the bar can show where it lives.
 type QuestionItem = {
-  field: TemplateField;
+  field: TemplateField | null;  // null when this is an unlocked section question
   sectionId: string;
   sectionNumber: string;
   sectionTitle: string;
   lockDelete: boolean;
+  isUnlockedSection?: boolean; // true = "do you need this section?" prompt
 };
 
 // Walks the section tree in document order and builds a flat ordered list
@@ -133,6 +134,22 @@ function buildQuestionList(sections: SectionNode[], fields: TemplateField[]): Qu
 
   function walk(nodes: SectionNode[]) {
     for (const section of nodes) {
+      // Add unlocked sections (where engineer edits freely) as a
+      // "do you need this section?" question before their field blanks
+      if (!section.lockEdit && !section.lockDelete) {
+        const seenKey = `__section__${section.id}`;
+        if (!seen.has(seenKey)) {
+          seen.add(seenKey);
+          questions.push({
+            field: null,
+            sectionId: section.id,
+            sectionNumber: section.number,
+            sectionTitle: section.title,
+            lockDelete: false,
+            isUnlockedSection: true,
+          });
+        }
+      }
       // Reset regex lastIndex for each content string
       regex.lastIndex = 0;
       let match;
@@ -184,11 +201,12 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
   if (questions.length === 0) return null;
 
   const current = questions[activeIndex];
-  const value = fieldValues[current.field.id] ?? current.field.defaultValue ?? "";
-
+  const value = current.field ? (fieldValues[current.field.id] ?? current.field.defaultValue ?? "") : "";
+  const isFilled = current.isUnlockedSection ? true : value.trim() !== "";
   // Compute answered/skipped status for every question for the dot tracker
   const statuses = questions.map((q, i) => {
-    const v = (fieldValues[q.field.id] ?? q.field.defaultValue ?? "").trim();
+    if (q.isUnlockedSection) return i === activeIndex ? "active" : "answered";
+    const v = (fieldValues[q.field!.id] ?? q.field!.defaultValue ?? "").trim();
     if (i === activeIndex) return "active";
     if (v !== "") return "answered";
     return "skipped";
@@ -197,7 +215,6 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
   const filledCount = statuses.filter(s => s === "answered").length;
   const skippedCount = statuses.filter(s => s === "skipped" || (s === "active" && value.trim() === "")).length;
   const allDone = filledCount === questions.length || (filledCount === questions.length - 1 && value.trim() !== "");
-  const isFilled = value.trim() !== "";
 
   function handleKey(e: React.KeyboardEvent) {
     if (e.key === "Enter" && activeIndex < questions.length - 1) {
@@ -209,12 +226,13 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
   // Finds the next unanswered question after the current index for the Skip button
   function findNextSkipped(): number | null {
     for (let i = activeIndex + 1; i < questions.length; i++) {
-      const v = (fieldValues[questions[i].field.id] ?? questions[i].field.defaultValue ?? "").trim();
+      if (questions[i].isUnlockedSection) continue;
+      const v = (fieldValues[questions[i].field!.id] ?? questions[i].field!.defaultValue ?? "").trim();
       if (v === "") return i;
     }
-    // Wrap around and check before current index
     for (let i = 0; i < activeIndex; i++) {
-      const v = (fieldValues[questions[i].field.id] ?? questions[i].field.defaultValue ?? "").trim();
+      if (questions[i].isUnlockedSection) continue;
+      const v = (fieldValues[questions[i].field!.id] ?? questions[i].field!.defaultValue ?? "").trim();
       if (v === "") return i;
     }
     return null;
@@ -248,10 +266,12 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
               return groups.map(group => (
                 <optgroup key={group.sectionTitle} label={`${group.sectionNumber} ${group.sectionTitle}`}>
                   {group.items.map(({ q, i }) => {
-                    const v = (fieldValues[q.field.id] ?? q.field.defaultValue ?? "").trim();
+                    const v = q.field ? (fieldValues[q.field.id] ?? q.field.defaultValue ?? "").trim() : "";
+                    const label = q.isUnlockedSection ? `Section: ${q.sectionTitle}` : q.field!.label;
+                    const key = q.isUnlockedSection ? `__section__${q.sectionId}` : q.field!.id;
                     return (
-                      <option key={q.field.id} value={i}>
-                        {v !== "" ? "✓" : "○"} {q.field.label}
+                      <option key={key} value={i}>
+                        {q.isUnlockedSection ? "?" : v !== "" ? "✓" : "○"} {label}
                       </option>
                     );
                   })}
@@ -289,9 +309,9 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
       <div className="flex items-center gap-1 flex-wrap">
         {statuses.map((status, i) => (
           <button
-            key={questions[i].field.id}
+            key={questions[i].isUnlockedSection ? `__section__${questions[i].sectionId}` : questions[i].field!.id}
             onClick={() => onChangeIndex(i)}
-            title={`Q${i + 1}: ${questions[i].field.label} - ${status === "answered" ? "answered" : status === "active" ? "current" : "unanswered"}`}
+            title={`Q${i + 1}: ${questions[i].isUnlockedSection ? questions[i].sectionTitle : questions[i].field!.label} - ${status === "answered" ? "answered" : status === "active" ? "current" : "unanswered"}`}
             className={`h-2.5 rounded-full transition-all ${
               status === "active"
                 ? "w-6 bg-primary"
@@ -317,49 +337,68 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
           <ChevronLeft className="h-4 w-4" />
         </Button>
 
-        {/* Question label + input */}
+        {/* Question label + input — differs based on whether this is an
+            unlocked section prompt or a regular blank field */}
         <div className="flex-1 flex items-center gap-3 min-w-0">
-          <label className="text-sm font-semibold shrink-0 flex items-center gap-1 min-w-fit">
-            {current.field.required && (
-              <span className="text-destructive text-xs" title="Required">*</span>
-            )}
-            {current.field.label}
-          </label>
-
-          {current.field.type === "paragraph" || current.field.type === "list" ? (
-            <div className="flex-1 flex flex-col gap-1 min-w-0">
-              <textarea
-                ref={inputRef as React.RefObject<HTMLTextAreaElement>}
-                value={value}
-                onChange={e => onChangeField(current.field.id, e.target.value)}
-                placeholder={current.field.placeholder || `Enter ${current.field.label.toLowerCase()}...`}
-                rows={2}
-                className="flex-1 border border-input rounded-md px-3 py-2 text-sm bg-background outline-none focus:border-primary resize-none"
-              />
-              {/* Live bullet preview for list type */}
-              {current.field.type === "list" && value.trim() && (
-                <ul className="ml-4 list-disc text-xs text-muted-foreground space-y-0.5">
-                  {value.split("\n").filter(l => l.trim()).map((line, i) => (
-                    <li key={i}>{line}</li>
-                  ))}
-                </ul>
-              )}
+          {current.isUnlockedSection ? (
+            /* Unlocked section — ask if engineer needs this section */
+            <div className="flex-1 flex items-center gap-3">
+              <span className="text-sm font-semibold">
+                Do you need the <span className="text-primary">{current.sectionTitle}</span> section?
+              </span>
+              <Button size="sm" variant="outline" className="h-8 px-3 text-xs border-green-500 text-green-600 hover:bg-green-50"
+                onClick={() => onChangeIndex(activeIndex + 1)}>
+                Yes, keep it
+              </Button>
+              <Button size="sm" variant="outline" className="h-8 px-3 text-xs border-destructive text-destructive hover:bg-destructive/10"
+                onClick={() => { onDeleteSection(current.sectionId); }}>
+                No, remove it
+              </Button>
             </div>
           ) : (
-            <input
-              ref={inputRef as React.RefObject<HTMLInputElement>}
-              type={current.field.type === "number" ? "number" : current.field.type === "date" ? "date" : "text"}
-              value={value}
-              onChange={e => onChangeField(current.field.id, e.target.value)}
-              onKeyDown={handleKey}
-              placeholder={current.field.placeholder || `Enter ${current.field.label.toLowerCase()}...`}
-              className="flex-1 h-9 border border-input rounded-md px-3 text-sm bg-background outline-none focus:border-primary"
-            />
-          )}
+            <>
+              <label className="text-sm font-semibold shrink-0 flex items-center gap-1 min-w-fit">
+                {current.field!.required && (
+                  <span className="text-destructive text-xs" title="Required">*</span>
+                )}
+                {current.field!.label}
+              </label>
 
-          {/* Answered checkmark */}
-          {isFilled && (
-            <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+              {current.field!.type === "paragraph" || current.field!.type === "list" ? (
+                <div className="flex-1 flex flex-col gap-1 min-w-0">
+                  <textarea
+                    ref={inputRef as React.RefObject<HTMLTextAreaElement>}
+                    value={value}
+                    onChange={e => onChangeField(current.field!.id, e.target.value)}
+                    placeholder={current.field!.placeholder || `Enter ${current.field!.label.toLowerCase()}...`}
+                    rows={2}
+                    className="flex-1 border border-input rounded-md px-3 py-2 text-sm bg-background outline-none focus:border-primary resize-none"
+                  />
+                  {current.field!.type === "list" && value.trim() && (
+                    <ul className="ml-4 list-disc text-xs text-muted-foreground space-y-0.5">
+                      {value.split("\n").filter(l => l.trim()).map((line, i) => (
+                        <li key={i}>{line}</li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+              ) : (
+                <input
+                  ref={inputRef as React.RefObject<HTMLInputElement>}
+                  type={current.field!.type === "number" ? "number" : current.field!.type === "date" ? "date" : "text"}
+                  value={value}
+                  onChange={e => onChangeField(current.field!.id, e.target.value)}
+                  onKeyDown={handleKey}
+                  placeholder={current.field!.placeholder || `Enter ${current.field!.label.toLowerCase()}...`}
+                  className="flex-1 h-9 border border-input rounded-md px-3 text-sm bg-background outline-none focus:border-primary"
+                />
+              )}
+
+              {/* Answered checkmark */}
+              {isFilled && (
+                <CheckCircle2 className="h-4 w-4 text-green-500 shrink-0" />
+              )}
+            </>
           )}
         </div>
 
@@ -490,22 +529,27 @@ function BlankInput({ field, value, onChange, onFocus }: {
     );
   }
 
-  // Bug 1 fix: inline input constrained to container width so it never
-  // overflows the page horizontally. maxWidth: 100% caps it at the
-  // paragraph/section width regardless of content length.
+  // contenteditable div wraps naturally like real text — no width calculation needed.
+  // Flows inline with surrounding content exactly like a word in a sentence.
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Sync external value into the div only when it differs (avoids cursor jump)
+  useEffect(() => {
+    if (ref.current && ref.current.innerText !== value) {
+      ref.current.innerText = value;
+    }
+  }, [value]);
+
   return (
-    <input
-      type={field.type === "number" ? "number" : field.type === "date" ? "date" : "text"}
-      value={value}
-      onChange={e => onChange(e.target.value)}
+    <div
+      ref={ref}
+      contentEditable
+      suppressContentEditableWarning
+      onInput={e => onChange((e.currentTarget as HTMLDivElement).innerText)}
       onFocus={onFocus}
-      placeholder={field.placeholder || field.label}
       title={field.label}
-      className={`inline-block ${baseClass}`}
-      style={{
-        width: `${Math.max(80, Math.min(400, (value.length || field.label.length) * 9))}px`,
-        maxWidth: "100%",
-      }}
+      className={`inline align-baseline ${baseClass} border rounded px-1 min-w-[80px] empty:before:content-[attr(data-placeholder)] empty:before:text-gray-400 empty:before:italic`}
+      data-placeholder={field.placeholder || field.label}
     />
   );
 }
@@ -927,7 +971,7 @@ function SowEngineerPageInner() {
   // When the engineer clicks a blank in the document preview, find its question
   // index and update the questionnaire bar to show that question.
   function handleFocusBlank(fieldId: string) {
-    const index = questions.findIndex(q => q.field.id === fieldId);
+    const index = questions.findIndex(q => q.field && q.field.id === fieldId);
     if (index !== -1) setActiveQuestionIndex(index);
   }
 
