@@ -619,7 +619,7 @@ function EngineerSectionContent({ content, fields, fieldValues, locked, onChange
   ) : (
     <div
       onClick={() => setEditing(true)}
-      className="cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 min-h-[1.5em]"
+      className="cursor-text rounded px-2 py-1.5 bg-gray-100 border border-gray-300 hover:bg-gray-150 min-h-[1.5em]"
     >
       {content ? renderedContent : <span className="text-gray-400 italic text-sm">Click to add content...</span>}
     </div>
@@ -641,11 +641,12 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
 }) {
   const headingClass = depth === 0 ? "text-2xl font-bold" : depth === 1 ? "text-xl font-semibold" : "text-lg font-medium";
   const indent = depth * 16;
+  const isUnlocked = !(section.lockEdit && section.lockDelete && section.lockAddSections && section.lockAddTable)
 
   return (
     <div id={section.id} style={{ marginLeft: `${indent}px`, marginBottom: depth === 0 ? "2rem" : "1.25rem" }}>
       <div className="flex items-baseline gap-2 mb-1">
-        {section.lockEdit && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
+        {!isUnlocked && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
         <span className="font-mono text-gray-400 shrink-0 text-sm select-none">{section.number}</span>
         <span className={headingClass}>{section.title}</span>
       </div>
@@ -998,6 +999,8 @@ function SowEngineerPageInner() {
     return sections.map(section => {
       const hasChildren = section.children.length > 0;
       const isExpanded = expandedIds.has(section.id);
+      //if section is unlocked AT ALL, then the lock is removed
+      const isUnlocked = !(section.lockEdit && section.lockDelete && section.lockAddSections && section.lockAddTable)
       return (
         <div key={section.id}>
           <button
@@ -1013,7 +1016,7 @@ function SowEngineerPageInner() {
             ) : (
               <div className="w-4 shrink-0" />
             )}
-            {section.lockEdit && <Lock className="h-2.5 w-2.5 text-slate-400 shrink-0" />}
+            {!isUnlocked && <Lock className="h-2.5 w-2.5 text-slate-400 shrink-0" />}
             <span className="font-mono text-gray-400 min-w-[35px] shrink-0">{section.number}</span>
             <span className="truncate">{section.title}</span>
           </button>
