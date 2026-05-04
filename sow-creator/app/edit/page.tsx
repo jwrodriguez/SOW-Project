@@ -966,7 +966,7 @@ function SowEditPageInner() {
                     setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockAddTable: !selectedSection?.lockAddTable }) }));
                   }} />
                 <RibbonBtn icon={selectedSection?.lockAddSections ? Lock : Unlock}
-                  label={"Lock Text"}
+                  label={"Lock Sections"}
                   active={selectedSection?.lockAddSections}
                   disabled={!selectedSection}
                   onClick={() => {
