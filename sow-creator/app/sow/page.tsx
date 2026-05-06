@@ -14,7 +14,7 @@
 import React, { Suspense, useMemo, useState, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Save, Download, FileText, ChevronRight, ChevronDown, Lock, ChevronLeft, CheckCircle2, Circle, FileDown, Plane } from "lucide-react";
+import { Grid2X2Plus, SquarePlus, Trash2, Type, Save, Download, FileText, ChevronRight, ChevronDown, Lock, ChevronLeft, CheckCircle2, Circle, FileDown, Plane } from "lucide-react";
 import type { TemplateData, SectionNode, TemplateField, HeaderFooterData } from "@/types/pageTypes";
 import { getGlobalTemplate } from "@/lib/db-pullTemp";
 
@@ -647,6 +647,19 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
     <div id={section.id} style={{ marginLeft: `${indent}px`, marginBottom: depth === 0 ? "2rem" : "1.25rem" }}>
       <div className="flex items-baseline gap-2 mb-1">
         {!isUnlocked && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
+        {isUnlocked && (section.lockEdit || section.lockDelete || section.lockAddSections || section.lockAddTable) && (
+          <div className="inline-grid grid-cols-2 gap-0.5 shrink-0">
+            {section.lockEdit && <div className="h-3 w-3" />}
+            {!section.lockEdit && <Type className="h-3 w-3 text-indigo-500" />}
+            {section.lockDelete && <div className="h-3 w-3" />}
+            {!section.lockDelete && <Trash2 className="h-3 w-3 text-red-400" />}
+            {section.lockAddSections && <div className="h-3 w-3" />}
+            {!section.lockAddSections && <SquarePlus className="h-3 w-3" />}
+            {section.lockAddTable && <div className="h-3 w-3" />}
+            {!section.lockAddTable && <Grid2X2Plus className="h-3 w-3 text-lime-700" />}
+            {/* <Lock className="h-2 w-2 text-slate-400" /> */}
+          </div>
+        )}
         <span className="font-mono text-gray-400 shrink-0 text-sm select-none">{section.number}</span>
         <span className={headingClass}>{section.title}</span>
       </div>
