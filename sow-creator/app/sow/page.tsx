@@ -14,7 +14,7 @@
 import React, { Suspense, useMemo, useState, useRef, useEffect } from "react";
 import { useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
-import { Save, Download, FileText, ChevronRight, ChevronDown, Lock, ChevronLeft, CheckCircle2, Circle, FileDown, Plane } from "lucide-react";
+import { Grid2X2Plus, SquarePlus, Trash2, Type, Save, Download, FileText, ChevronRight, ChevronDown, Lock, ChevronLeft, CheckCircle2, Circle, FileDown, Plane } from "lucide-react";
 import type { TemplateData, SectionNode, TemplateField, HeaderFooterData } from "@/types/pageTypes";
 import { getGlobalTemplate } from "@/lib/db-pullTemp";
 
@@ -136,7 +136,7 @@ function buildQuestionList(sections: SectionNode[], fields: TemplateField[]): Qu
     for (const section of nodes) {
       // Add unlocked sections (where engineer edits freely) as a
       // "do you need this section?" question before their field blanks
-      if (!section.lockEdit && !section.lockDelete) {
+      if (!section.lockDelete) {
         const seenKey = `__section__${section.id}`;
         if (!seen.has(seenKey)) {
           seen.add(seenKey);
@@ -347,7 +347,11 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
                 Do you need the <span className="text-primary">{current.sectionTitle}</span> section?
               </span>
               <Button size="sm" variant="outline" className="h-8 px-3 text-xs border-green-500 text-green-600 hover:bg-green-50"
-                onClick={() => onChangeIndex(activeIndex + 1)}>
+                onClick={() => {
+                  if (activeIndex < questions.length - 1) {
+                    onChangeIndex(activeIndex + 1);
+                  }
+                }}>
                 Yes, keep it
               </Button>
               <Button size="sm" variant="outline" className="h-8 px-3 text-xs border-destructive text-destructive hover:bg-destructive/10"
@@ -619,7 +623,7 @@ function EngineerSectionContent({ content, fields, fieldValues, locked, onChange
   ) : (
     <div
       onClick={() => setEditing(true)}
-      className="cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 min-h-[1.5em]"
+      className="cursor-text rounded px-2 py-1.5 bg-gray-100 border border-gray-300 hover:bg-gray-150 min-h-[1.5em]"
     >
       {content ? renderedContent : <span className="text-gray-400 italic text-sm">Click to add content...</span>}
     </div>
@@ -628,8 +632,8 @@ function EngineerSectionContent({ content, fields, fieldValues, locked, onChange
 
 // ─── Engineer section block ───────────────────────────────────────────────────
 // Renders one section for the engineer. No hover toolbars, no admin controls.
-// lockEdit controls whether the content text is editable. Tables are read-only.
-function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeContent, onChangeField, onFocusBlank, children }: {
+// lockEdit controls whether the content text is editable. Tables are editable.
+function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeContent, onChangeField, onFocusBlank, onAddSection, onAddTable, onDeleteSection, onUpdateCell, onDeleteTable, hoveredSectionId, setHoveredSectionId, children }: {
   section: SectionNode;
   depth: number;
   fields: TemplateField[];
@@ -637,18 +641,67 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
   onChangeContent: (sectionId: string, value: string) => void;
   onChangeField: (fieldId: string, value: string) => void;
   onFocusBlank: (fieldId: string) => void;
+  onAddSection: (parentId: string) => void;
+  onAddTable: (sectionId: string, rows: number, cols: number) => void;
+  onDeleteSection: (sectionId: string) => void;
+  onUpdateCell: (tid: string, r: number, c: number, v: string) => void;
+  onDeleteTable: (tableId: string) => void;
+  hoveredSectionId: string | null;
+  setHoveredSectionId: (id: string | null) => void;
   children?: React.ReactNode;
 }) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showTableForm, setShowTableForm] = useState(false);
+  const [tr, setTr] = useState(3);
+  const [tc, setTc] = useState(3);
   const headingClass = depth === 0 ? "text-2xl font-bold" : depth === 1 ? "text-xl font-semibold" : "text-lg font-medium";
   const indent = depth * 16;
+  const isUnlocked = !(section.lockEdit && section.lockDelete && section.lockAddSections && section.lockAddTable)
 
   return (
-    <div id={section.id} style={{ marginLeft: `${indent}px`, marginBottom: depth === 0 ? "2rem" : "1.25rem" }}>
+    <div id={section.id} style={{ marginLeft: `${indent}px`, marginBottom: depth === 0 ? "2rem" : "1.25rem" }} className="relative" onMouseMove={(e) => {
+      let target = e.target as HTMLElement;
+      while (target && target !== e.currentTarget) {
+        if (target.id && target.id.startsWith('sec-')) {
+          setHoveredSectionId(target.id);
+          return;
+        }
+        target = target.parentElement!;
+      }
+      setHoveredSectionId(section.id);
+    }} onMouseLeave={() => { setHoveredSectionId(null); setShowTableForm(false); }}>
       <div className="flex items-baseline gap-2 mb-1">
-        {section.lockEdit && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
+        {!isUnlocked && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
+        {isUnlocked && (section.lockEdit || section.lockDelete || section.lockAddSections || section.lockAddTable) && (
+          <div className="inline-grid grid-cols-2 gap-0.5 shrink-0">
+            {section.lockEdit && <div className="h-3 w-3" />}
+            {!section.lockEdit && <Type className="h-3 w-3 text-indigo-500" />}
+            {section.lockDelete && <div className="h-3 w-3" />}
+            {!section.lockDelete && <Trash2 className="h-3 w-3 text-red-400" />}
+            {section.lockAddSections && <div className="h-3 w-3" />}
+            {!section.lockAddSections && <SquarePlus className="h-3 w-3" />}
+            {section.lockAddTable && <div className="h-3 w-3" />}
+            {!section.lockAddTable && <Grid2X2Plus className="h-3 w-3 text-lime-700" />}
+            {/* <Lock className="h-2 w-2 text-slate-400" /> */}
+          </div>
+        )}
         <span className="font-mono text-gray-400 shrink-0 text-sm select-none">{section.number}</span>
         <span className={headingClass}>{section.title}</span>
       </div>
+
+      {/* Table size picker */}
+      {showTableForm && (
+        <div className="flex items-center gap-2 mb-2 p-2 bg-gray-50 border border-gray-200 rounded text-xs" style={{ marginLeft: `${32}px` }}>
+          <span className="text-gray-600">Rows (1-20):</span>
+          <input type="number" min={1} max={20} value={tr} onChange={e => setTr(Number(e.target.value) || 3)} className="w-12 border rounded px-1 py-0.5" />
+          <span className="text-gray-600">× Cols (1-10):</span>
+          <input type="number" min={1} max={10} value={tc} onChange={e => setTc(Number(e.target.value) || 3)} className="w-12 border rounded px-1 py-0.5" />
+          <button onClick={() => { onAddTable(section.id, tr, tc); setShowTableForm(false); }}
+            className="bg-primary text-primary-foreground px-2 py-0.5 rounded hover:opacity-90">Add</button>
+          <button onClick={() => setShowTableForm(false)} className="px-2 py-0.5 rounded hover:bg-gray-200 text-gray-600">Cancel</button>
+        </div>
+      )}
+
       <div style={{ marginLeft: `${32}px` }}>
         <EngineerSectionContent
           content={section.content}
@@ -663,23 +716,49 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
       {section.tables && section.tables.length > 0 && (
         <div style={{ marginLeft: `${32}px` }} className="mt-3 space-y-4">
           {section.tables.map(table => (
-            <table key={table.id} className="border-collapse text-xs w-full">
-              <tbody>
-                {table.data.map((row, ri) => (
-                  <tr key={ri}>
-                    {row.map((cell, ci) => (
-                      <td key={ci} className="border border-gray-300 p-1.5 text-sm">
-                        {cell || <span className="text-gray-300">—</span>}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div key={table.id}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-gray-400 font-mono">{table.rows}×{table.cols} table</span>
+                <button onClick={() => onDeleteTable(table.id)} className="text-red-400 hover:text-red-600"><Trash2 className="h-3 w-3" /></button>
+              </div>
+              <table className="border-collapse text-xs w-full">
+                <tbody>
+                  {table.data.map((row, ri) => (
+                    <tr key={ri}>
+                      {row.map((cell, ci) => (
+                        <td key={ci} className="border border-gray-300 p-0">
+                          <input value={cell} onChange={e => onUpdateCell(table.id, ri, ci, e.target.value)}
+                            className="w-full p-1.5 outline-none focus:bg-blue-50 text-sm" placeholder={`r${ri + 1}c${ci + 1}`} />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           ))}
         </div>
       )}
       {children}
+      {hoveredSectionId === section.id && (
+        <div className="absolute top-0 right-0 bg-white border border-gray-300 rounded shadow-lg p-2 z-10">
+          {showDeleteConfirm ? (
+            <div className="flex flex-col gap-2">
+              <span className="text-sm">Do you need the "{section.title}" section?</span>
+              <div className="flex gap-1">
+                <Button size="sm" onClick={() => setShowDeleteConfirm(false)}>Yes, keep it</Button>
+                <Button size="sm" variant="destructive" onClick={() => { onDeleteSection(section.id); setShowDeleteConfirm(false); }}>No, delete it</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {!section.lockAddSections && <Button size="sm" onClick={() => onAddSection(section.id)}>Add Subsection</Button>}
+              {!section.lockAddTable && <Button size="sm" onClick={() => setShowTableForm(true)}>Add Table</Button>}
+              {/* {!section.lockDelete && <Button size="sm" variant="destructive" onClick={() => setShowDeleteConfirm(true)}>Delete Section</Button>} */}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -837,6 +916,9 @@ function SowEngineerPageInner() {
   // When the engineer moves to a new question the document scrolls to that section.
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
 
+  // Hovered section ID to manage popup visibility (only deepest hovered section shows popup)
+  const [hoveredSectionId, setHoveredSectionId] = useState<string | null>(null);
+
   // Ordered list of questions derived from the section tree and fields array.
   // Recomputed whenever data changes (e.g. after loading a new draft).
   const questions = useMemo(() => buildQuestionList(data.sections, data.fields), [data.sections, data.fields]);
@@ -844,8 +926,9 @@ function SowEngineerPageInner() {
   // Scrolls to the section containing the active question so the engineer
   // can see where the blank lives in the document while answering in the bar.
   function handleChangeQuestionIndex(index: number) {
-    setActiveQuestionIndex(index);
-    const question = questions[index];
+    const safeIndex = Math.max(0, Math.min(index, questions.length - 1));
+    setActiveQuestionIndex(safeIndex);
+    const question = questions[safeIndex];
     if (question) {
       document.getElementById(question.sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
@@ -968,6 +1051,72 @@ function SowEngineerPageInner() {
     setActiveQuestionIndex(prev => Math.max(0, prev - 1));
   }
 
+  // Adds a new subsection to the specified parent section.
+  function handleAddSection(parentId: string) {
+    function addSection(sections: SectionNode[], parentId: string): SectionNode[] {
+      return sections.map(s => {
+        if (s.id === parentId) {
+          const newId = `${s.id}-child-${Date.now()}`;
+          const baseNumber = s.number.replace(/\.0$/, '');
+          const newNumber = `${baseNumber}.${s.children.length + 1}`;
+          const newSection: SectionNode = {
+            id: newId,
+            number: newNumber,
+            title: 'New Subsection',
+            content: '',
+            lockEdit: false,
+            lockDelete: false,
+            lockAddSections: false,
+            lockAddTable: false,
+            tables: [],
+            children: []
+          };
+          return { ...s, children: [...s.children, newSection] };
+        } else {
+          return { ...s, children: addSection(s.children, parentId) };
+        }
+      });
+    }
+    setData(p => ({ ...p, sections: addSection(p.sections, parentId) }));
+  }
+
+  // Adds a new table to the specified section.
+  function handleAddTable(sectionId: string, rows: number, cols: number) {
+    function addTable(sections: SectionNode[], sectionId: string, rows: number, cols: number): SectionNode[] {
+      return sections.map(s =>
+        s.id === sectionId ? { ...s, tables: [...s.tables, { id: `table-${Date.now()}`, rows, cols, data: Array.from({length: rows}, () => Array(cols).fill("")) }] } : { ...s, children: addTable(s.children, sectionId, rows, cols) }
+      );
+    }
+    setData(p => ({ ...p, sections: addTable(p.sections, sectionId, rows, cols) }));
+  }
+
+  // Deletes a table from the specified section.
+  function handleDeleteTable(tableId: string) {
+    function deleteTable(sections: SectionNode[], tableId: string): SectionNode[] {
+      return sections.map(s => ({
+        ...s,
+        tables: s.tables.filter(t => t.id !== tableId),
+        children: deleteTable(s.children, tableId)
+      }));
+    }
+    setData(p => ({ ...p, sections: deleteTable(p.sections, tableId) }));
+  }
+
+  // Updates a cell in a table.
+  function handleUpdateCell(tableId: string, row: number, col: number, value: string) {
+    function updateCell(sections: SectionNode[], tableId: string, row: number, col: number, value: string): SectionNode[] {
+      return sections.map(s => ({
+        ...s,
+        tables: s.tables.map(t => t.id === tableId ? {
+          ...t,
+          data: t.data.map((r, ri) => ri === row ? r.map((c, ci) => ci === col ? value : c) : r)
+        } : t),
+        children: updateCell(s.children, tableId, row, col, value)
+      }));
+    }
+    setData(p => ({ ...p, sections: updateCell(p.sections, tableId, row, col, value) }));
+  }
+
   // When the engineer clicks a blank in the document preview, find its question
   // index and update the questionnaire bar to show that question.
   function handleFocusBlank(fieldId: string) {
@@ -987,6 +1136,13 @@ function SowEngineerPageInner() {
         onChangeContent={handleChangeContent}
         onChangeField={handleChangeField}
         onFocusBlank={handleFocusBlank}
+        onAddSection={handleAddSection}
+        onAddTable={handleAddTable}
+        onDeleteTable={handleDeleteTable}
+        onUpdateCell={handleUpdateCell}
+        onDeleteSection={handleDeleteSection}
+        hoveredSectionId={hoveredSectionId}
+        setHoveredSectionId={setHoveredSectionId}
       >
         {section.children.length > 0 && renderSections(section.children, depth + 1)}
       </EngineerSectionBlock>
@@ -998,6 +1154,8 @@ function SowEngineerPageInner() {
     return sections.map(section => {
       const hasChildren = section.children.length > 0;
       const isExpanded = expandedIds.has(section.id);
+      //if section is unlocked AT ALL, then the lock is removed
+      const isUnlocked = !(section.lockEdit && section.lockDelete && section.lockAddSections && section.lockAddTable)
       return (
         <div key={section.id}>
           <button
@@ -1013,7 +1171,7 @@ function SowEngineerPageInner() {
             ) : (
               <div className="w-4 shrink-0" />
             )}
-            {section.lockEdit && <Lock className="h-2.5 w-2.5 text-slate-400 shrink-0" />}
+            {!isUnlocked && <Lock className="h-2.5 w-2.5 text-slate-400 shrink-0" />}
             <span className="font-mono text-gray-400 min-w-[35px] shrink-0">{section.number}</span>
             <span className="truncate">{section.title}</span>
           </button>

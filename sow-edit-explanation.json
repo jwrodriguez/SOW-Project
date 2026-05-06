@@ -1,0 +1,230 @@
+{
+  "fields": [
+    {
+      "id": "field_blanks_1777933827163",
+      "type": "text",
+      "label": "blanks",
+      "required": false
+    },
+    {
+      "id": "field_this_will_be_a_blank_1778083288885",
+      "type": "text",
+      "label": "This will be a blank",
+      "required": true,
+      "placeholder": "some things should go here"
+    },
+    {
+      "id": "field_this_will_be_another_blank_1778083312255",
+      "type": "paragraph",
+      "label": "This will be another blank",
+      "required": false,
+      "placeholder": "more things will go here"
+    },
+    {
+      "id": "field_and_another_blank_1778083336818",
+      "type": "number",
+      "label": "And another blank",
+      "required": true,
+      "placeholder": "More stuff goes here"
+    }
+  ],
+  "sections": [
+    {
+      "id": "sec-1777933624352",
+      "title": "Testing Locks",
+      "number": "1.0",
+      "tables": [],
+      "content": "This section will be used to display the different locks, what they do, and what they look like on the user's side.\nEVERY section, sub-section, and sub-sub-section are able to have different lock settings. \nJust because section 1.0 is fully locked does not mean 1.1 is fully locked. This is done to allow enough flexibility for you (the admin) to create the sow structures and possibilities engineers need while still maintaining the standardized format this project aims to solve.",
+      "children": [
+        {
+          "id": "sec-1777933675100",
+          "title": "Everything Fully Locked",
+          "number": "1.1",
+          "tables": [],
+          "content": "All four locks are enabled:\nText\nDeletion\nTables\nSections\n\nThe ONLY thing an engineer can interact with would be the {{field_blanks_1777933827163}} that you insert.\nIf NO blanks are added, the engineer will NOT be able to change ANYTHING about this section.",
+          "children": [],
+          "lockEdit": true,
+          "lockDelete": true,
+          "lockAddTable": true,
+          "lockAddSections": true
+        },
+        {
+          "id": "sec-1777933694935",
+          "title": "Text Unlocked",
+          "number": "1.2",
+          "tables": [],
+          "content": "When the \"Lock Text\" is disabled, the engineer can edit this exact text you're reading here. \nThis is useful when a section is dependent on the purpose of the sow and there is no standard that EVERY sow would follow. \nFor example, the \"Background\" section may have text unlocked, as no set of blanks could capture all of the information needed for the section.",
+          "children": [],
+          "lockEdit": false,
+          "lockDelete": true,
+          "lockAddTable": true,
+          "lockAddSections": true
+        },
+        {
+          "id": "sec-1777933709335",
+          "title": "Deletion Unlocked",
+          "number": "1.3",
+          "tables": [],
+          "content": "When the \"Lock Deletion\" is disabled, the engineer is able to delete this whole section and all of the following sub-sections. \nIn the engineer's view, they will be asked \"Do you need this section?\" for any section that is deletable.\n\nA section where Deletion is unlocked would be like a manufacturing limits/requirements. \nFor example, a sow that dictates certain measurements or materials to be used for parts would need that section, while a sow that is requesting deliverance of an already manufactured product would not need that section. \nIn the latter scenario, the engineer would select \"no, I do not need this section\", and all of the sub-sections would be removed from their sow, and the blanks associated will not need to be answered.",
+          "children": [],
+          "lockEdit": true,
+          "lockDelete": false,
+          "lockAddTable": true,
+          "lockAddSections": true
+        },
+        {
+          "id": "sec-1777933718200",
+          "title": "Table Addition Unlocked",
+          "number": "1.4",
+          "tables": [
+            {
+              "id": "t-1777935391704",
+              "cols": 4,
+              "data": [
+                [
+                  "Tables",
+                  "Look",
+                  "Like",
+                  "This"
+                ]
+              ],
+              "rows": 1
+            }
+          ],
+          "content": "When the \"Lock Tables\" is disabled, the engineer is able to add tables to this section.\nThis may be useful to make charts, describe deliverable's timelines, or other things that rows and columns help to represent.",
+          "children": [],
+          "lockEdit": true,
+          "lockDelete": true,
+          "lockAddTable": false,
+          "lockAddSections": true
+        },
+        {
+          "id": "sec-1777933730883",
+          "title": "Section Addition Unlocked",
+          "number": "1.5",
+          "tables": [],
+          "content": "When the \"Lock Sections\" is disabled, the engineer is able to add sub-sections to this section. Each sub-section has every lock disabled, as the user would need to modify the text, perhaps add tables, perhaps add more sections, and definitely delete the section if it turns out to not be needed.\nThis may be utilized on a specific sub-section where the engineer should construct the entailed contents of a section. For example, this may be used for...",
+          "children": [],
+          "lockEdit": true,
+          "lockDelete": true,
+          "lockAddTable": true,
+          "lockAddSections": false
+        }
+      ],
+      "lockEdit": true,
+      "lockDelete": true,
+      "lockAddTable": true,
+      "lockAddSections": true
+    },
+    {
+      "id": "sec-1778082817324",
+      "title": "Varying Locks",
+      "number": "2.0",
+      "tables": [],
+      "content": "Here will be a display of various locks to show how the final sow may look, and how the user interacts with them.",
+      "children": [
+        {
+          "id": "sec-1778082852776",
+          "title": "boilerplate section",
+          "number": "2.1",
+          "tables": [],
+          "content": "This would be a manditory section. Think of the 'background' or 'scope' section. This '2.1' is required, but not all of 2.1.1,2.1.1.1, etc.",
+          "children": [
+            {
+              "id": "sec-1778082854930",
+              "title": "Required section with some blanks",
+              "number": "2.1.1",
+              "tables": [],
+              "content": "{{field_this_will_be_a_blank_1778083288885}}\n {{field_this_will_be_another_blank_1778083312255}}\n {{field_and_another_blank_1778083336818}}",
+              "children": [
+                {
+                  "id": "sec-1778082856986",
+                  "title": "Optional, deletable sub-section",
+                  "number": "2.1.1.1",
+                  "tables": [],
+                  "content": "This would be a fully optional sub-section. The user is allowed to delete this, or edit the text you see. This would be for sections that a user will have a heavy hand in, yet might not need for every sow.",
+                  "children": [],
+                  "lockEdit": false,
+                  "lockDelete": false,
+                  "lockAddTable": true,
+                  "lockAddSections": true
+                }
+              ],
+              "lockEdit": true,
+              "lockDelete": true,
+              "lockAddTable": true,
+              "lockAddSections": true
+            },
+            {
+              "id": "sec-1778082855106",
+              "title": "Another optional section, with tables allowed",
+              "number": "2.1.2",
+              "tables": [],
+              "content": "This is another optional section (it is deletable), but this time an engineer could add a table. This might be the permissions for a 'Government Furnished Properties' section, where not all sows will have this section, but when they do there will be a table or multiple tables added.",
+              "children": [],
+              "lockEdit": true,
+              "lockDelete": false,
+              "lockAddTable": false,
+              "lockAddSections": true
+            }
+          ],
+          "lockEdit": true,
+          "lockDelete": true,
+          "lockAddTable": true,
+          "lockAddSections": true
+        },
+        {
+          "id": "sec-1778082853321",
+          "title": "Optional section with optional sub-sections",
+          "number": "2.2",
+          "tables": [],
+          "content": "This section is not needed, but when it is the user will need to add sub-sections, and many of them. Think of the 'Manufacturing Requirements' section of a sow. Not every sow has that section, but the ones that do have many sub-sections, each having numerous more sub-sections.",
+          "children": [],
+          "lockEdit": true,
+          "lockDelete": false,
+          "lockAddTable": true,
+          "lockAddSections": false
+        },
+        {
+          "id": "sec-1778082854009",
+          "title": "Fully editable section",
+          "number": "2.3",
+          "tables": [],
+          "content": "This is the 'most variation' an engineer could have on a section. They could change this text, delete this whole section, add tables to it, or add sub-sections. This is the \"Most Unlocked\" section.",
+          "children": [],
+          "lockEdit": false,
+          "lockDelete": false,
+          "lockAddTable": false,
+          "lockAddSections": false
+        }
+      ],
+      "lockEdit": true,
+      "lockDelete": true,
+      "lockAddTable": true,
+      "lockAddSections": true
+    }
+  ],
+  "coverPage": {
+    "date": "2026-05-01",
+    "title": "Statement of Work",
+    "version": "1.0",
+    "building": "",
+    "location": "",
+    "clientName": "",
+    "department": "",
+    "preparedBy": "",
+    "projectNumber": "SOW-2026-001",
+    "confidentiality": "Confidential"
+  },
+  "documentName": "Untitled SOW",
+  "headerFooter": {
+    "footerLeft": "SOW-2026-001",
+    "headerLeft": "Statement of Work",
+    "footerRight": "Page {PAGE}",
+    "headerRight": "",
+    "footerCenter": "",
+    "headerCenter": "",
+    "showPageNumbers": true,
+    "pageNumberPosition": "footer-right"
+  }
+}

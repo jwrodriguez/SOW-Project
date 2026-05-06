@@ -24,6 +24,9 @@ import {
   ListOrdered, Edit2, Table as TableIcon, Lock, Unlock, GripVertical,
   X, Check, PlusCircle, type LucideIcon,
   Plane,
+  Type,
+  SquarePlus,
+  Grid2X2Plus,
 } from "lucide-react";
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -383,7 +386,20 @@ export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fi
 
       {/* Section heading */}
       <div className="flex items-baseline gap-2 mb-1" style={{ marginLeft: `${depth * 16}px` }}>
-        {section.lockEdit && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
+        {(section.lockEdit && section.lockDelete && section.lockAddSections && section.lockAddTable) && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
+        {!(section.lockEdit && section.lockDelete && section.lockAddSections && section.lockAddTable) && (section.lockEdit || section.lockDelete || section.lockAddSections || section.lockAddTable) && (
+          <div className="inline-grid grid-cols-2 gap-0.5 shrink-0">
+            {section.lockEdit && <div className="h-3 w-3" />}
+            {!section.lockEdit && <Type className="h-3 w-3 text-indigo-500" />}
+            {section.lockDelete && <div className="h-3 w-3" />}
+            {!section.lockDelete && <Trash2 className="h-3 w-3 text-red-400" />}
+            {section.lockAddSections && <div className="h-3 w-3" />}
+            {!section.lockAddSections && <SquarePlus className="h-3 w-3" />}
+            {section.lockAddTable && <div className="h-3 w-3" />}
+            {!section.lockAddTable && <Grid2X2Plus className="h-3 w-3 text-lime-700" />}
+            {/* <Lock className="h-2 w-2 text-slate-400" /> */}
+          </div>)
+          }
         <span className="font-mono text-gray-400 shrink-0 text-sm select-none">{section.number}</span>
         <EditableText value={section.title} onChange={v => onUpdate({ title: v })} className={headingClass} placeholder="Section title..." disabled={false} />
       </div>
@@ -869,19 +885,15 @@ function SowEditPageInner() {
         {/* Slim header — just sidebar trigger + doc name */}
         <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4 bg-background sticky top-0 z-10">
           <div className="flex items-center gap-2">
-            <a href="/">
-                <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <Plane className="size-4" />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold uppercase tracking-tighter">
-                    SoWizard
-                  </span>
-                  <span className="truncate text-xs text-muted-foreground uppercase font-mono">
-                    Tinker AFB
-                  </span>
-                </div>
-              </a>
+            <a href="/"  className="flex items-center gap-2">
+              <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg shrink-0">
+                <Plane className="size-4" />
+              </div>
+              <div className="flex flex-col text-left leading-tight">
+                <span className="text-sm font-semibold uppercase tracking-tighter">SoWizard</span>
+                <span className="text-[10px] text-muted-foreground uppercase font-mono">Tinker AFB</span>
+              </div>
+            </a>
             <SidebarTrigger className="-ml-1" />
             <FileText className="h-4 w-4 text-primary" />
             {isEditingName ? (
@@ -966,7 +978,7 @@ function SowEditPageInner() {
                     setData(p => ({ ...p, sections: updateSection(p.sections, selectedSectionId, { lockAddTable: !selectedSection?.lockAddTable }) }));
                   }} />
                 <RibbonBtn icon={selectedSection?.lockAddSections ? Lock : Unlock}
-                  label={"Lock Text"}
+                  label={"Lock Sections"}
                   active={selectedSection?.lockAddSections}
                   disabled={!selectedSection}
                   onClick={() => {
