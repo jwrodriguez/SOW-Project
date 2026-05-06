@@ -8,6 +8,7 @@ from docx.shared import Pt, Inches, RGBColor
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
+
 import io
 import re
 
@@ -116,17 +117,40 @@ def resolve_tokens(content: str, field_map: dict[str, str]) -> str:
 # Depth 0 = Heading 1, depth 1 = Heading 2, depth 2 = Heading 3.
 def add_sections(doc: Document, sections: list[SectionNode], field_map: dict[str, str], depth: int = 0):
     heading_level = min(depth + 1, 3)
+    BODY_INDENT = Inches(0.3)
 
     for section in sections:
         # Section heading — number + title
         heading_text = f"{section.number}  {section.title}"
-        doc.add_heading(heading_text, level=heading_level)
+        heading = doc.add_heading("", level=heading_level)
+        run = heading.add_run(heading_text)
+
+        style_run(
+            run,
+            font_size=18 if heading_level == 1 else 14,
+            bold=True
+        )
+
+        if heading_level > 1:
+            heading.paragraph_format.left_indent = Inches(0.3 * (heading_level - 1))
+        
+        
 
         # Section body — resolve any {{tokens}} to their filled values
+        INDENT = Inches(0.3)
+
         if section.content.strip():
             resolved = resolve_tokens(section.content, field_map)
-            para = doc.add_paragraph(resolved)
-            para.style = doc.styles["Normal"]
+
+            para = doc.add_paragraph()
+
+            base_indent = 0.3  # inches
+
+            para.paragraph_format.left_indent = Inches(base_indent * (heading_level - 1))
+            para.paragraph_format.first_line_indent = Inches(0.3)
+
+            run = para.add_run(resolved)
+            style_run(run, font_size=12)
 
         # Tables
         if section.tables:
@@ -150,6 +174,21 @@ def add_sections(doc: Document, sections: list[SectionNode], field_map: dict[str
 async def generate_docx(template: TemplateData):
     try:
         doc = Document()
+
+        
+
+        for i in range(1, 4):
+            style = doc.styles[f"Heading {i}"]
+            rPr = style._element.get_or_add_rPr()
+
+            # Remove theme color if it exists
+            for elem in rPr.findall(qn('w:color')):
+                rPr.remove(elem)
+
+            # Force black color
+            color = OxmlElement("w:color")
+            color.set(qn("w:val"), "000000")
+            rPr.append(color)
 
         # Build a field map of id -> resolved value for token replacement.
         field_map = {
@@ -409,3 +448,13 @@ async def generate_docx(template: TemplateData):
 @app.get("/health")
 async def health():
     return {"status": "ok"}
+
+
+# Style Changes for parity with SOW-Editor
+def style_run(run, font_name="Calibri", font_size=11, color=(0, 0, 0), bold=False):
+    run.font.name = font_name
+    run.font.size = Pt(font_size)
+    run.font.bold = bold
+    # Required for Word to fully respect font name
+    run._element.rPr.rFonts.set(qn('w:eastAsia'), font_name)
+    run.font.color.rgb = RGBColor(*color)
