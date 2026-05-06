@@ -2,6 +2,10 @@ to start the python exporting service, follow these instructions:
 
 navigate to this document's folder (`repository_root/docx-service`)
 
+create a new virtual environment in python (`python -m venv venv` for python 3.3+)
+activate the virtual environment (`./venv/Scripts/activate` for windows, or `./venv/bin/activate` for linux)
+install the required packages in `requirements.txt`
+
 run the command in a separate terminal from the node runner (as they are both infinite-loop commands)
 `python -m uvicorn main:app --reload --port 8000`
 
