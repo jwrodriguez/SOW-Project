@@ -1301,18 +1301,18 @@ function SowEngineerPageInner() {
                 <div className="absolute inset-8 border-4 border-black pointer-events-none" />
                 <div className="absolute inset-8 flex items-center justify-center">
                   <div className="text-center w-full px-12">
-                    <p className="text-4xl font-bold">
+                    <div className="text-4xl font-bold">
                       <EngineerSectionContent content="{{field_cover_title}}" fields={data.fields} fieldValues={fieldValues} locked={true} onChangeContent={() => {}} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank} />
-                    </p>
+                    </div>
                     <p className="text-3xl font-semibold mt-6">FOR</p>
-                    <p className="text-4xl font-bold mt-4">
+                    <div className="text-4xl font-bold mt-4">
                       <EngineerSectionContent content="{{field_cover_client_name}}" fields={data.fields} fieldValues={fieldValues} locked={true} onChangeContent={() => {}} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank} />
-                    </p>
+                    </div>
                     <div className="flex items-baseline justify-center gap-2 mt-4">
                       <span className="text-3xl font-semibold">BUILDING</span>
-                      <span className="text-3xl font-semibold">
+                      <div className="text-3xl font-semibold">
                         <EngineerSectionContent content="{{field_cover_building}}" fields={data.fields} fieldValues={fieldValues} locked={true} onChangeContent={() => {}} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank} />
-                      </span>
+                      </div>
                     </div>
                     <div className="mt-16 space-y-3">
                       <div className="text-xl">
