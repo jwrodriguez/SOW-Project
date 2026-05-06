@@ -278,7 +278,7 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
                     const key = q.isUnlockedSection ? `__section__${q.sectionId}` : q.field!.id;
                     return (
                       <option key={key} value={i}>
-                        {q.isUnlockedSection ? "?" : v !== "" ? "✓" : "○"} {label}
+                        {q.isUnlockedSection ? "?" : v !== "" ? "✓" : "○"} {q.sectionNumber} · {label}
                       </option>
                     );
                   })}
@@ -396,7 +396,10 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
           {current.isUnlockedSection ? (
             /* Unlocked section — ask if engineer needs this section */
             <div className="flex-1 flex items-center gap-3">
-              <span className="text-sm font-semibold">
+              <span className="text-sm font-semibold flex items-center gap-1.5">
+                <span className="font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">
+                  {current.sectionNumber}
+                </span>
                 Do you need the <span className="text-primary">{current.sectionTitle}</span> section?
               </span>
               <Button size="sm" variant="outline" className="h-8 px-3 text-xs border-green-500 text-green-600 hover:bg-green-50"
@@ -414,7 +417,10 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
             </div>
           ) : (
             <>
-              <label className="text-sm font-semibold shrink-0 flex items-center gap-1 min-w-fit">
+              <label className="text-sm font-semibold shrink-0 flex items-center gap-1.5 min-w-fit">
+                <span className="font-mono text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                  {current.sectionNumber}
+                </span>
                 {current.field!.required && (
                   <span className="text-destructive text-xs" title="Required">*</span>
                 )}
