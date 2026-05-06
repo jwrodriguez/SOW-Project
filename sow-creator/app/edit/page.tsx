@@ -869,19 +869,15 @@ function SowEditPageInner() {
         {/* Slim header — just sidebar trigger + doc name */}
         <header className="flex h-12 shrink-0 items-center justify-between gap-2 border-b px-4 bg-background sticky top-0 z-10">
           <div className="flex items-center gap-2">
-            <a href="/">
-                <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg">
-                  <Plane className="size-4" />
-                </div>
-                <div className="grid flex-1 text-left text-sm leading-tight">
-                  <span className="truncate font-semibold uppercase tracking-tighter">
-                    SoWizard
-                  </span>
-                  <span className="truncate text-xs text-muted-foreground uppercase font-mono">
-                    Tinker AFB
-                  </span>
-                </div>
-              </a>
+            <a href="/"  className="flex items-center gap-2">
+              <div className="bg-primary text-primary-foreground flex aspect-square size-8 items-center justify-center rounded-lg shrink-0">
+                <Plane className="size-4" />
+              </div>
+              <div className="flex flex-col text-left leading-tight">
+                <span className="text-sm font-semibold uppercase tracking-tighter">SoWizard</span>
+                <span className="text-[10px] text-muted-foreground uppercase font-mono">Tinker AFB</span>
+              </div>
+            </a>
             <SidebarTrigger className="-ml-1" />
             <FileText className="h-4 w-4 text-primary" />
             {isEditingName ? (
