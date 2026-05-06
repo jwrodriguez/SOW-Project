@@ -195,10 +195,12 @@ function BlankChip({ field, onClick, onDelete }: {
 // Parses the section content string for {{field_id}} tokens and renders them as BlankChips.
 // Plain text between tokens renders as normal spans.
 // When unlocked: click-to-edit textarea. When locked: static text with interactive blank chips.
-function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, onChange }: {
+function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, onChange, className = "text-sm leading-relaxed", placeholder = "Click to add content..." }: {
   content: string; fields: TemplateField[]; locked: boolean;
   onClickBlank: (fieldId: string) => void; onDeleteBlank: (fieldId: string) => void;
   onChange: (v: string) => void;
+  className?: string;
+  placeholder?: string;
 }) {
   const fieldMap = useMemo(() => new Map(fields.map(f => [f.id, f])), [fields]);
 
@@ -224,32 +226,32 @@ function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, 
   if (!locked) {
     return editing ? (
       <textarea autoFocus value={content} onChange={e => onChange(e.target.value)}
-        onBlur={() => setEditing(false)} rows={Math.max(3, (content.match(/\n/g) || []).length + 2)}
-        className="bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full resize-none text-sm leading-relaxed" />
+        onBlur={() => setEditing(false)} rows={Math.max(1, (content.match(/\n/g) || []).length + 1)}
+        className={`bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full resize-none ${className}`} />
     ) : (
       <div onClick={() => setEditing(true)}
-        className="cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 whitespace-pre-wrap min-h-[1.2em] text-sm leading-relaxed">
+        className={`cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 whitespace-pre-wrap min-h-[1.2em] ${className}`}>
         {segments.map((seg, i) => {
           if (seg.type === "text") return <span key={i}>{seg.value}</span>;
           const field = fieldMap.get(seg.fieldId);
           if (!field) return <span key={i} className="text-red-400">{`{{${seg.fieldId}}}`}</span>;
           return <BlankChip key={i} field={field} onClick={() => onClickBlank(field.id)} onDelete={() => onDeleteBlank(field.id)} />;
         })}
-        {!content && <span className="text-gray-400 italic text-sm font-normal">Click to add content...</span>}
+        {!content && <span className="text-gray-400 italic font-normal">{placeholder}</span>}
       </div>
     );
   }
 
   // Locked: render static text with blank chips
   return (
-    <div className="whitespace-pre-wrap min-h-[1.2em] text-sm leading-relaxed px-1">
+    <div className={`whitespace-pre-wrap min-h-[1.2em] px-1 ${className}`}>
       {segments.map((seg, i) => {
         if (seg.type === "text") return <span key={i}>{seg.value}</span>;
         const field = fieldMap.get(seg.fieldId);
         if (!field) return <span key={i} className="text-red-400">{`{{${seg.fieldId}}}`}</span>;
         return <BlankChip key={i} field={field} onClick={() => onClickBlank(field.id)} onDelete={() => onDeleteBlank(field.id)} />;
       })}
-      {!content && <span className="text-gray-400 italic text-sm font-normal">No content — insert blanks or unlock to edit.</span>}
+      {!content && <span className="text-gray-400 italic font-normal">No content — insert blanks or unlock to edit.</span>}
     </div>
   );
 }
@@ -264,30 +266,41 @@ function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, 
  * 
  * @returns A JSX Element component serving as a template/design for a specific page of the document with editable header footer areas
  */
-export function DocumentPage({ hf, onHF, pageNumber, children }: {
-  hf: HeaderFooterData; onHF: (k: keyof HeaderFooterData, v: string) => void; pageNumber: number; children: React.ReactNode;
+export function DocumentPage({ hf, onHF, pageNumber, fields, onClickBlank, onDeleteBlank, children }: {
+  hf: HeaderFooterData; onHF: (k: keyof HeaderFooterData, v: string) => void; pageNumber: number;
+  fields: TemplateField[]; onClickBlank: (id: string) => void; onDeleteBlank: (id: string) => void;
+  children: React.ReactNode;
 }) {
+  const resolve = (text: string) => text.replace("{PAGE}", String(pageNumber));
+
+  const renderZone = (k: keyof HeaderFooterData, className: string, placeholder: string) => (
+    <SectionContent
+      content={k.startsWith("footer") ? resolve(hf[k] as string) : hf[k] as string}
+      fields={fields}
+      locked={false}
+      onClickBlank={onClickBlank}
+      onDeleteBlank={onDeleteBlank}
+      onChange={v => onHF(k, v)}
+      className={className}
+      placeholder={placeholder}
+    />
+  );
+
   return (
     <div className="bg-white shadow-lg mx-auto text-black" style={{ width: "8.5in", minHeight: "11in", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "0.5in 1in 0.1in 1in" }}>
         <div className="grid grid-cols-3 gap-1 text-sm text-gray-700">
-          <EditableArea value={hf.headerLeft} onChange={v => onHF("headerLeft", v)} placeholder="Header left" />
-          <EditableArea value={hf.headerCenter} onChange={v => onHF("headerCenter", v)} className="text-center" placeholder="Header center" />
-          <EditableArea value={hf.headerRight} onChange={v => onHF("headerRight", v)} className="text-right" placeholder="Header right" />
+          {renderZone("headerLeft", "text-left", "Header left")}
+          {renderZone("headerCenter", "text-center", "Header center")}
+          {renderZone("headerRight", "text-right", "Header right")}
         </div>
       </div>
       <div style={{ padding: "0.1in 1in", flex: 1 }}>{children}</div>
       <div style={{ padding: "0.1in 1in 0.5in 1in" }}>
-        <div className="grid grid-cols-3 gap-1 text-gray-700">
-          {(hf.showPageNumbers && hf.pageNumberPosition === "footer-left") ? (
-              <EditableFooterZone value={hf.footerLeft} onChange={v => onHF("footerLeft", v)} pageNumber={pageNumber} className="text-left" placeholder="Page {PAGE}" />
-          ): <EditableFooterZone value={hf.footerLeft} onChange={v => onHF("footerLeft", v)} pageNumber={pageNumber} className="text-left" placeholder="Footer left" />}
-          {(hf.showPageNumbers && hf.pageNumberPosition === "footer-center") ? (
-              <EditableFooterZone value={hf.footerCenter} onChange={v => onHF("footerCenter", v)} pageNumber={pageNumber} className="text-center" placeholder="Page {PAGE}" />
-          ): <EditableFooterZone value={hf.footerCenter} onChange={v => onHF("footerCenter", v)} pageNumber={pageNumber} className="text-center" placeholder="Footer center" />}
-          {(hf.showPageNumbers && hf.pageNumberPosition === "footer-right") ? (
-              <EditableFooterZone value={hf.footerRight} onChange={v => onHF("footerRight", v)} pageNumber={pageNumber} className="text-right" placeholder="Page {PAGE}" />
-          ): <EditableFooterZone value={hf.footerRight} onChange={v => onHF("footerRight", v)} pageNumber={pageNumber} className="text-right" placeholder="Footer right" />}
+        <div className="grid grid-cols-3 gap-1 text-sm text-gray-700">
+          {renderZone("footerLeft", "text-left", hf.showPageNumbers && hf.pageNumberPosition === "footer-left" ? "Page {PAGE}" : "Footer left")}
+          {renderZone("footerCenter", "text-center", hf.showPageNumbers && hf.pageNumberPosition === "footer-center" ? "Page {PAGE}" : "Footer center")}
+          {renderZone("footerRight", "text-right", hf.showPageNumbers && hf.pageNumberPosition === "footer-right" ? "Page {PAGE}" : "Footer right")}
         </div>
       </div>
     </div>
@@ -587,24 +600,22 @@ function SowEditPageInner() {
         { id: "field_prohibited_mats_009",     label: "Prohibited Materials",            type: "paragraph", placeholder: "List any prohibited materials...",  required: false },
         { id: "field_written_submittals_010",  label: "Written Submittals",              type: "paragraph", placeholder: "Describe required documentation...",required: false },
         { id: "field_gfp_details_011",         label: "Government Furnished Property",   type: "paragraph", placeholder: "List any GFP items provided...",    required: false },
+        { id: "field_cover_title", label: "SOW Title", type: "text", defaultValue: "Statement of Work", required: true },
+        { id: "field_project_number", label: "Project Number", type: "text", defaultValue: "SOW-2026-001", required: true },
+        { id: "field_cover_client_name", label: "Client Name", type: "text", required: false },
+        { id: "field_cover_building", label: "Building", type: "text", required: false },
+        { id: "field_cover_location", label: "Location", type: "text", required: false },
+        { id: "field_cover_prepared_by", label: "Prepared By", type: "text", required: false },
+        { id: "field_cover_department", label: "Department", type: "text", required: false },
+        { id: "field_cover_date", label: "Date", type: "date", required: false },
+        { id: "field_cover_confidentiality", label: "Confidentiality", type: "text", defaultValue: "Confidential", required: false },
+        { id: "field_cover_description", label: "Description", type: "paragraph", required: false },
       ],
-      coverPage: {
-        title: "Statement of Work",
-        projectNumber: "SOW-2026-001",
-        clientName: "",
-        building: "",
-        location: "",
-        preparedBy: "",
-        department: "",
-        date: new Date().toISOString().split("T")[0],
-        version: "1.0",
-        confidentiality: "Confidential",
-      },
       headerFooter: {
         headerLeft: "Statement of Work",
         headerCenter: "",
         headerRight: "",
-        footerLeft: "SOW-2026-001",
+        footerLeft: "{{field_project_number}}",
         footerCenter: "",
         footerRight: "Page {PAGE}",
         showPageNumbers: true,
@@ -653,7 +664,29 @@ function SowEditPageInner() {
       try {
         const dbData = await getGlobalTemplate();
         if (dbData){
-        setData(dbData as TemplateData);}
+          let migratedDbData = { ...(dbData as TemplateData) };
+          if (migratedDbData.coverPage) {
+            // Add default cover fields if they don't exist
+            const coverFields: TemplateField[] = [
+              { id: "field_cover_title", label: "SOW Title", type: "text", defaultValue: migratedDbData.coverPage.title || "Statement of Work", required: true },
+              { id: "field_project_number", label: "Project Number", type: "text", defaultValue: migratedDbData.coverPage.projectNumber || "SOW-2026-001", required: true },
+              { id: "field_cover_client_name", label: "Client Name", type: "text", defaultValue: migratedDbData.coverPage.clientName || "", required: false },
+              { id: "field_cover_building", label: "Building", type: "text", defaultValue: migratedDbData.coverPage.building || "", required: false },
+              { id: "field_cover_location", label: "Location", type: "text", defaultValue: migratedDbData.coverPage.location || "", required: false },
+              { id: "field_cover_prepared_by", label: "Prepared By", type: "text", defaultValue: migratedDbData.coverPage.preparedBy || "", required: false },
+              { id: "field_cover_department", label: "Department", type: "text", defaultValue: migratedDbData.coverPage.department || "", required: false },
+              { id: "field_cover_date", label: "Date", type: "date", defaultValue: migratedDbData.coverPage.date || new Date().toISOString().split("T")[0], required: false },
+              { id: "field_cover_confidentiality", label: "Confidentiality", type: "text", defaultValue: migratedDbData.coverPage.confidentiality || "Confidential", required: false },
+              { id: "field_cover_description", label: "Description", type: "paragraph", defaultValue: "", required: false },
+            ];
+            migratedDbData.fields = [...coverFields, ...migratedDbData.fields.filter(f => !f.id.startsWith("field_cover_") && f.id !== "field_project_number")];
+            if (migratedDbData.headerFooter.footerLeft === migratedDbData.coverPage.projectNumber) {
+              migratedDbData.headerFooter.footerLeft = "{{field_project_number}}";
+            }
+            delete migratedDbData.coverPage;
+          }
+          setData(migratedDbData);
+        }
       } catch (e) {
         console.error("Failed to load template from IndexedDB:", e);
       }
@@ -686,8 +719,6 @@ function SowEditPageInner() {
   );
 
   // Shorthand updaters for cover page and header/footer fields
-  const updateCover = (k: keyof typeof data.coverPage, v: string) =>
-    setData(p => ({ ...p, coverPage: { ...p.coverPage, [k]: v } }));
   const updateHF = (k: keyof HeaderFooterData, v: string) =>
     setData(p => ({ ...p, headerFooter: { ...p.headerFooter, [k]: v } }));
   function toggleExpand(id: string) {
@@ -1084,29 +1115,33 @@ function SowEditPageInner() {
                     <div className="absolute inset-8 border-4 border-black pointer-events-none" />
                     <div className="absolute inset-8 flex items-center justify-center">
                       <div className="text-center w-full px-12">
-                        <EditableText value={data.coverPage.title} onChange={v => updateCover("title", v)} className="text-4xl font-bold" placeholder="SOW Title" />
+                        <SectionContent content="{{field_cover_title}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank} onChange={() => {}} className="text-4xl font-bold" placeholder="SOW Title" />
 
                         <p className="text-3xl font-semibold mt-6 select-none">FOR</p>
-                        <EditableText value={data.coverPage.clientName} onChange={v => updateCover("clientName", v)} className="text-4xl font-bold mt-4" placeholder="Product Name" />
+                        <div className="mt-4">
+                          <SectionContent content="{{field_cover_client_name}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank} onChange={() => {}} className="text-4xl font-bold" placeholder="Product Name" />
+                        </div>
                             
                         <div className="flex items-baseline justify-center gap-2 mt-10">
                           <span className="text-3xl font-semibold select-none">BUILDING</span>
-                          <EditableText value={data.coverPage.building} onChange={v => updateCover("building", v)} className="text-3xl font-semibold" placeholder="#" />
+                          <div className="flex-1 max-w-[200px]">
+                            <SectionContent content="{{field_cover_building}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank} onChange={() => {}} className="text-3xl font-semibold" placeholder="#" />
+                          </div>
                         </div>
 
                         <div className="mt-16 space-y-3">
-                          <EditableText value={data.coverPage.location} onChange={v => updateCover("location", v)} className="text-xl" placeholder="Location" />
+                          <SectionContent content="{{field_cover_location}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank} onChange={() => {}} className="text-xl" placeholder="Location" />
                           <p className="text-lg font-semibold mt-10 select-none">Prepared by</p>
-                          <EditableText value={data.coverPage.preparedBy} onChange={v => updateCover("preparedBy", v)} className="text-xl" placeholder="Name" />
-                          <EditableText value={data.coverPage.department} onChange={v => updateCover("department", v)} className="text-xl" placeholder="Team / Department" />
-                          <EditableText value={data.coverPage.date} onChange={v => updateCover("date", v)} className="text-xl mt-2" placeholder="Date" />
+                          <SectionContent content="{{field_cover_prepared_by}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank} onChange={() => {}} className="text-xl" placeholder="Name" />
+                          <SectionContent content="{{field_cover_department}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank} onChange={() => {}} className="text-xl" placeholder="Team / Department" />
+                          <SectionContent content="{{field_cover_date}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank} onChange={() => {}} className="text-xl mt-2" placeholder="Date" />
                         </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Table of Contents — auto-generated from tocData, not directly editable */}
-                  <DocumentPage hf={data.headerFooter} onHF={updateHF} pageNumber={2}>
+                  <DocumentPage hf={data.headerFooter} onHF={updateHF} pageNumber={2} fields={data.fields} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank}>
                     <h2 className="font-bold text-lg mb-6 text-center">Table of Contents</h2>
                     <div className="space-y-0.5">
                       {tocData.entries.map((entry, i) => (
@@ -1123,7 +1158,7 @@ function SowEditPageInner() {
                   </DocumentPage>
 
                   {/* Section Content — locked sections shown read-only, unlocked sections editable */}
-                  <DocumentPage hf={data.headerFooter} onHF={updateHF} pageNumber={3}>
+                  <DocumentPage hf={data.headerFooter} onHF={updateHF} pageNumber={3} fields={data.fields} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank}>
                     {renderSections(data.sections)}
                     <button onClick={() => setData(p => ({
                       ...p, sections: renumberSections([...p.sections, { id: `sec-${Date.now()}`, number: "", title: "New Section", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] }])

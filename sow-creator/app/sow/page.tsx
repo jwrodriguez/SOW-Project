@@ -51,24 +51,22 @@ const DEFAULT_TEMPLATE: TemplateData = {
     { id: "field_prohibited_mats_009",     label: "Prohibited Materials",            type: "paragraph", placeholder: "List any prohibited materials...",  required: false },
     { id: "field_written_submittals_010",  label: "Written Submittals",              type: "paragraph", placeholder: "Describe required documentation...",required: false },
     { id: "field_gfp_details_011",         label: "Government Furnished Property",   type: "paragraph", placeholder: "List any GFP items provided...",    required: false },
+    { id: "field_cover_title", label: "SOW Title", type: "text", defaultValue: "Statement of Work", required: true },
+    { id: "field_project_number", label: "Project Number", type: "text", defaultValue: "SOW-2026-001", required: true },
+    { id: "field_cover_client_name", label: "Client Name", type: "text", required: false },
+    { id: "field_cover_building", label: "Building", type: "text", required: false },
+    { id: "field_cover_location", label: "Location", type: "text", required: false },
+    { id: "field_cover_prepared_by", label: "Prepared By", type: "text", required: false },
+    { id: "field_cover_department", label: "Department", type: "text", required: false },
+    { id: "field_cover_date", label: "Date", type: "date", required: false },
+    { id: "field_cover_confidentiality", label: "Confidentiality", type: "text", defaultValue: "Confidential", required: false },
+    { id: "field_cover_description", label: "Description", type: "paragraph", required: false },
   ],
-  coverPage: {
-    title: "Statement of Work",
-    projectNumber: "SOW-2026-001",
-    clientName: "",
-    building: "",
-    location: "",
-    preparedBy: "",
-    department: "",
-    date: new Date().toISOString().split("T")[0],
-    version: "1.0",
-    confidentiality: "Confidential",
-  },
   headerFooter: {
     headerLeft: "Statement of Work",
     headerCenter: "",
     headerRight: "",
-    footerLeft: "SOW-2026-001",
+    footerLeft: "{{field_project_number}}",
     footerCenter: "",
     footerRight: "Page {PAGE}",
     showPageNumbers: true,
@@ -772,27 +770,44 @@ function updateSectionContent(sections: SectionNode[], id: string, content: stri
 
 // ─── Document page wrapper ────────────────────────────────────────────────────
 // Static header and footer — engineers cannot edit these zones.
-function DocumentPage({ hf, pageNumber, children }: {
+function DocumentPage({ hf, pageNumber, fields, fieldValues, onChangeField, onFocusBlank, children }: {
   hf: HeaderFooterData;
   pageNumber: number;
+  fields: TemplateField[];
+  fieldValues: Record<string, string>;
+  onChangeField: (fieldId: string, value: string) => void;
+  onFocusBlank: (fieldId: string) => void;
   children: React.ReactNode;
 }) {
   const resolve = (text: string) => text.replace("{PAGE}", String(pageNumber));
+
+  const renderZone = (content: string) => (
+    <EngineerSectionContent
+      content={resolve(content)}
+      fields={fields}
+      fieldValues={fieldValues}
+      locked={true}
+      onChangeContent={() => {}}
+      onChangeField={onChangeField}
+      onFocusBlank={onFocusBlank}
+    />
+  );
+
   return (
     <div className="bg-white shadow-lg mx-auto text-black" style={{ width: "8.5in", minHeight: "11in", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "0.5in 1in 0.1in 1in" }}>
         <div className="grid grid-cols-3 gap-1 text-sm text-gray-700">
-          <div className="whitespace-pre-wrap">{hf.headerLeft}</div>
-          <div className="whitespace-pre-wrap text-center">{hf.headerCenter}</div>
-          <div className="whitespace-pre-wrap text-right">{hf.headerRight}</div>
+          <div className="whitespace-pre-wrap">{renderZone(hf.headerLeft)}</div>
+          <div className="whitespace-pre-wrap text-center">{renderZone(hf.headerCenter)}</div>
+          <div className="whitespace-pre-wrap text-right">{renderZone(hf.headerRight)}</div>
         </div>
       </div>
       <div style={{ padding: "0.1in 1in", flex: 1 }}>{children}</div>
       <div style={{ padding: "0.1in 1in 0.5in 1in" }}>
         <div className="grid grid-cols-3 gap-1 text-sm text-gray-700">
-          <div className="whitespace-pre-wrap">{resolve(hf.footerLeft)}</div>
-          <div className="whitespace-pre-wrap text-center">{resolve(hf.footerCenter)}</div>
-          <div className="whitespace-pre-wrap text-right">{resolve(hf.footerRight)}</div>
+          <div className="whitespace-pre-wrap">{renderZone(hf.footerLeft)}</div>
+          <div className="whitespace-pre-wrap text-center">{renderZone(hf.footerCenter)}</div>
+          <div className="whitespace-pre-wrap text-right">{renderZone(hf.footerRight)}</div>
         </div>
       </div>
     </div>
@@ -844,22 +859,49 @@ function SowEngineerPageInner() {
         
         // Only update if we actually got a valid object back
         if (dbData) {
-          setData(dbData as TemplateData);
+          // If the DB data still has an old coverPage, we need to migrate it to fields
+          let migratedDbData = { ...(dbData as TemplateData) };
+          if (migratedDbData.coverPage) {
+            // Add default cover fields if they don't exist
+            const coverFields: TemplateField[] = [
+              { id: "field_cover_title", label: "SOW Title", type: "text", defaultValue: migratedDbData.coverPage.title || "Statement of Work", required: true },
+              { id: "field_project_number", label: "Project Number", type: "text", defaultValue: migratedDbData.coverPage.projectNumber || "SOW-2026-001", required: true },
+              { id: "field_cover_client_name", label: "Client Name", type: "text", defaultValue: migratedDbData.coverPage.clientName || "", required: false },
+              { id: "field_cover_building", label: "Building", type: "text", defaultValue: migratedDbData.coverPage.building || "", required: false },
+              { id: "field_cover_location", label: "Location", type: "text", defaultValue: migratedDbData.coverPage.location || "", required: false },
+              { id: "field_cover_prepared_by", label: "Prepared By", type: "text", defaultValue: migratedDbData.coverPage.preparedBy || "", required: false },
+              { id: "field_cover_department", label: "Department", type: "text", defaultValue: migratedDbData.coverPage.department || "", required: false },
+              { id: "field_cover_date", label: "Date", type: "date", defaultValue: migratedDbData.coverPage.date || new Date().toISOString().split("T")[0], required: false },
+              { id: "field_cover_confidentiality", label: "Confidentiality", type: "text", defaultValue: migratedDbData.coverPage.confidentiality || "Confidential", required: false },
+              { id: "field_cover_description", label: "Description", type: "paragraph", defaultValue: "", required: false },
+            ];
+            migratedDbData.fields = [...coverFields, ...migratedDbData.fields.filter(f => !f.id.startsWith("field_cover_") && f.id !== "field_project_number")];
+            if (migratedDbData.headerFooter.footerLeft === migratedDbData.coverPage.projectNumber) {
+              migratedDbData.headerFooter.footerLeft = "{{field_project_number}}";
+            }
+            delete migratedDbData.coverPage;
+          }
+
+          setData(migratedDbData);
 
           if (draftParam) {
             const parsedData = JSON.parse(atob(draftParam));
-            setData((prevData) => ({
-            ...prevData, // Copy all existing data
-            documentName: parsedData.documentName, // Override name
-            coverPage: { 
-              ...prevData.coverPage, // Keep other cover page fields (title, date, version, confidentiality)
-              clientName: parsedData.clientName,
-              building: parsedData.building,
-              location: parsedData.location,
-              preparedBy: parsedData.preparedBy,
-              department: parsedData.department,
-            },
-          }));}
+            setData((prevData) => {
+              const updatedData = { ...prevData };
+              updatedData.documentName = parsedData.documentName;
+              
+              if (parsedData.fieldValues) {
+                // We map these over to the default values of fields directly
+                updatedData.fields = updatedData.fields.map(f => {
+                  if (parsedData.fieldValues[f.id] !== undefined) {
+                    return { ...f, defaultValue: parsedData.fieldValues[f.id] };
+                  }
+                  return f;
+                });
+              }
+              return updatedData;
+            });
+          }
           
           // Sync UI states that depend on the data structure
           setExpandedIds(new Set((dbData as TemplateData).sections.map(s => s.id)));
@@ -1259,26 +1301,40 @@ function SowEngineerPageInner() {
                 <div className="absolute inset-8 border-4 border-black pointer-events-none" />
                 <div className="absolute inset-8 flex items-center justify-center">
                   <div className="text-center w-full px-12">
-                    <p className="text-4xl font-bold">{data.coverPage.title}</p>
+                    <p className="text-4xl font-bold">
+                      <EngineerSectionContent content="{{field_cover_title}}" fields={data.fields} fieldValues={fieldValues} locked={true} onChangeContent={() => {}} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank} />
+                    </p>
                     <p className="text-3xl font-semibold mt-6">FOR</p>
-                    <p className="text-4xl font-bold mt-4">{data.coverPage.clientName || "—"}</p>
+                    <p className="text-4xl font-bold mt-4">
+                      <EngineerSectionContent content="{{field_cover_client_name}}" fields={data.fields} fieldValues={fieldValues} locked={true} onChangeContent={() => {}} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank} />
+                    </p>
                     <div className="flex items-baseline justify-center gap-2 mt-4">
                       <span className="text-3xl font-semibold">BUILDING</span>
-                      <span className="text-3xl font-semibold">{data.coverPage.building || "—"}</span>
+                      <span className="text-3xl font-semibold">
+                        <EngineerSectionContent content="{{field_cover_building}}" fields={data.fields} fieldValues={fieldValues} locked={true} onChangeContent={() => {}} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank} />
+                      </span>
                     </div>
                     <div className="mt-16 space-y-3">
-                      <p className="text-xl">{data.coverPage.location || "—"}</p>
+                      <div className="text-xl">
+                        <EngineerSectionContent content="{{field_cover_location}}" fields={data.fields} fieldValues={fieldValues} locked={true} onChangeContent={() => {}} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank} />
+                      </div>
                       <p className="text-lg font-semibold mt-4">Prepared by</p>
-                      <p className="text-xl">{data.coverPage.preparedBy || "—"}</p>
-                      <p className="text-xl">{data.coverPage.department || "—"}</p>
-                      <p className="text-xl mt-2">{data.coverPage.date}</p>
+                      <div className="text-xl">
+                        <EngineerSectionContent content="{{field_cover_prepared_by}}" fields={data.fields} fieldValues={fieldValues} locked={true} onChangeContent={() => {}} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank} />
+                      </div>
+                      <div className="text-xl">
+                        <EngineerSectionContent content="{{field_cover_department}}" fields={data.fields} fieldValues={fieldValues} locked={true} onChangeContent={() => {}} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank} />
+                      </div>
+                      <div className="text-xl mt-2">
+                        <EngineerSectionContent content="{{field_cover_date}}" fields={data.fields} fieldValues={fieldValues} locked={true} onChangeContent={() => {}} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank} />
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Table of Contents */}
-              <DocumentPage hf={data.headerFooter} pageNumber={2}>
+              <DocumentPage hf={data.headerFooter} pageNumber={2} fields={data.fields} fieldValues={fieldValues} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank}>
                 <h2 className="font-bold text-lg mb-6 text-center">Table of Contents</h2>
                 <div className="space-y-0.5">
                   {tocData.entries.map((entry, i) => (
@@ -1295,7 +1351,7 @@ function SowEngineerPageInner() {
               </DocumentPage>
 
               {/* Section content */}
-              <DocumentPage hf={data.headerFooter} pageNumber={3}>
+              <DocumentPage hf={data.headerFooter} pageNumber={3} fields={data.fields} fieldValues={fieldValues} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank}>
                 {data.sections.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-64 text-center gap-2">
                     <p className="text-sm text-muted-foreground">No sections loaded.</p>
