@@ -632,8 +632,8 @@ function EngineerSectionContent({ content, fields, fieldValues, locked, onChange
 
 // ─── Engineer section block ───────────────────────────────────────────────────
 // Renders one section for the engineer. No hover toolbars, no admin controls.
-// lockEdit controls whether the content text is editable. Tables are read-only.
-function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeContent, onChangeField, onFocusBlank, onAddSection, onDeleteSection, hoveredSectionId, setHoveredSectionId, children }: {
+// lockEdit controls whether the content text is editable. Tables are editable.
+function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeContent, onChangeField, onFocusBlank, onAddSection, onAddTable, onDeleteSection, onUpdateCell, hoveredSectionId, setHoveredSectionId, children }: {
   section: SectionNode;
   depth: number;
   fields: TemplateField[];
@@ -642,12 +642,17 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
   onChangeField: (fieldId: string, value: string) => void;
   onFocusBlank: (fieldId: string) => void;
   onAddSection: (parentId: string) => void;
+  onAddTable: (sectionId: string, rows: number, cols: number) => void;
   onDeleteSection: (sectionId: string) => void;
+  onUpdateCell: (tid: string, r: number, c: number, v: string) => void;
   hoveredSectionId: string | null;
   setHoveredSectionId: (id: string | null) => void;
   children?: React.ReactNode;
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [showTableForm, setShowTableForm] = useState(false);
+  const [tr, setTr] = useState(3);
+  const [tc, setTc] = useState(3);
   const headingClass = depth === 0 ? "text-2xl font-bold" : depth === 1 ? "text-xl font-semibold" : "text-lg font-medium";
   const indent = depth * 16;
   const isUnlocked = !(section.lockEdit && section.lockDelete && section.lockAddSections && section.lockAddTable)
@@ -663,7 +668,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
         target = target.parentElement!;
       }
       setHoveredSectionId(section.id);
-    }} onMouseLeave={() => setHoveredSectionId(null)}>
+    }} onMouseLeave={() => { setHoveredSectionId(null); setShowTableForm(false); }}>
       <div className="flex items-baseline gap-2 mb-1">
         {!isUnlocked && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
         {isUnlocked && (section.lockEdit || section.lockDelete || section.lockAddSections || section.lockAddTable) && (
@@ -682,6 +687,20 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
         <span className="font-mono text-gray-400 shrink-0 text-sm select-none">{section.number}</span>
         <span className={headingClass}>{section.title}</span>
       </div>
+
+      {/* Table size picker */}
+      {showTableForm && (
+        <div className="flex items-center gap-2 mb-2 p-2 bg-gray-50 border border-gray-200 rounded text-xs" style={{ marginLeft: `${32}px` }}>
+          <span className="text-gray-600">Rows (1-20):</span>
+          <input type="number" min={1} max={20} value={tr} onChange={e => setTr(Number(e.target.value) || 3)} className="w-12 border rounded px-1 py-0.5" />
+          <span className="text-gray-600">× Cols (1-10):</span>
+          <input type="number" min={1} max={10} value={tc} onChange={e => setTc(Number(e.target.value) || 3)} className="w-12 border rounded px-1 py-0.5" />
+          <button onClick={() => { onAddTable(section.id, tr, tc); setShowTableForm(false); }}
+            className="bg-primary text-primary-foreground px-2 py-0.5 rounded hover:opacity-90">Add</button>
+          <button onClick={() => setShowTableForm(false)} className="px-2 py-0.5 rounded hover:bg-gray-200 text-gray-600">Cancel</button>
+        </div>
+      )}
+
       <div style={{ marginLeft: `${32}px` }}>
         <EngineerSectionContent
           content={section.content}
@@ -698,15 +717,16 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
           {section.tables.map(table => (
             <table key={table.id} className="border-collapse text-xs w-full">
               <tbody>
-                {table.data.map((row, ri) => (
-                  <tr key={ri}>
-                    {row.map((cell, ci) => (
-                      <td key={ci} className="border border-gray-300 p-1.5 text-sm">
-                        {cell || <span className="text-gray-300">—</span>}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
+                  {table.data.map((row, ri) => (
+                    <tr key={ri}>
+                      {row.map((cell, ci) => (
+                        <td key={ci} className="border border-gray-300 p-0">
+                          <input value={cell} onChange={e => onUpdateCell(table.id, ri, ci, e.target.value)}
+                            className="w-full p-1.5 outline-none focus:bg-blue-50 text-sm" placeholder={`r${ri + 1}c${ci + 1}`} />
+                        </td>
+                      ))}
+                    </tr>
+                  ))}
               </tbody>
             </table>
           ))}
@@ -726,7 +746,8 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
           ) : (
             <div className="flex flex-col gap-1">
               {!section.lockAddSections && <Button size="sm" onClick={() => onAddSection(section.id)}>Add Subsection</Button>}
-              {!section.lockDelete && <Button size="sm" variant="destructive" onClick={() => setShowDeleteConfirm(true)}>Delete Section</Button>}
+              {!section.lockAddTable && <Button size="sm" onClick={() => setShowTableForm(true)}>Add Table</Button>}
+              {/* {!section.lockDelete && <Button size="sm" variant="destructive" onClick={() => setShowDeleteConfirm(true)}>Delete Section</Button>} */}
             </div>
           )}
         </div>
@@ -1052,6 +1073,31 @@ function SowEngineerPageInner() {
     setData(p => ({ ...p, sections: addSection(p.sections, parentId) }));
   }
 
+  // Adds a new table to the specified section.
+  function handleAddTable(sectionId: string, rows: number, cols: number) {
+    function addTable(sections: SectionNode[], sectionId: string, rows: number, cols: number): SectionNode[] {
+      return sections.map(s =>
+        s.id === sectionId ? { ...s, tables: [...s.tables, { id: `table-${Date.now()}`, rows, cols, data: Array.from({length: rows}, () => Array(cols).fill("")) }] } : { ...s, children: addTable(s.children, sectionId, rows, cols) }
+      );
+    }
+    setData(p => ({ ...p, sections: addTable(p.sections, sectionId, rows, cols) }));
+  }
+
+  // Updates a cell in a table.
+  function handleUpdateCell(tableId: string, row: number, col: number, value: string) {
+    function updateCell(sections: SectionNode[], tableId: string, row: number, col: number, value: string): SectionNode[] {
+      return sections.map(s => ({
+        ...s,
+        tables: s.tables.map(t => t.id === tableId ? {
+          ...t,
+          data: t.data.map((r, ri) => ri === row ? r.map((c, ci) => ci === col ? value : c) : r)
+        } : t),
+        children: updateCell(s.children, tableId, row, col, value)
+      }));
+    }
+    setData(p => ({ ...p, sections: updateCell(p.sections, tableId, row, col, value) }));
+  }
+
   // When the engineer clicks a blank in the document preview, find its question
   // index and update the questionnaire bar to show that question.
   function handleFocusBlank(fieldId: string) {
@@ -1072,6 +1118,8 @@ function SowEngineerPageInner() {
         onChangeField={handleChangeField}
         onFocusBlank={handleFocusBlank}
         onAddSection={handleAddSection}
+        onAddTable={handleAddTable}
+        onUpdateCell={handleUpdateCell}
         onDeleteSection={handleDeleteSection}
         hoveredSectionId={hoveredSectionId}
         setHoveredSectionId={setHoveredSectionId}
