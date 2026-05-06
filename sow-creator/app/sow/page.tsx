@@ -136,7 +136,7 @@ function buildQuestionList(sections: SectionNode[], fields: TemplateField[]): Qu
     for (const section of nodes) {
       // Add unlocked sections (where engineer edits freely) as a
       // "do you need this section?" question before their field blanks
-      if (!section.lockEdit && !section.lockDelete) {
+      if (!section.lockDelete) {
         const seenKey = `__section__${section.id}`;
         if (!seen.has(seenKey)) {
           seen.add(seenKey);
@@ -347,7 +347,11 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
                 Do you need the <span className="text-primary">{current.sectionTitle}</span> section?
               </span>
               <Button size="sm" variant="outline" className="h-8 px-3 text-xs border-green-500 text-green-600 hover:bg-green-50"
-                onClick={() => onChangeIndex(activeIndex + 1)}>
+                onClick={() => {
+                  if (activeIndex < questions.length - 1) {
+                    onChangeIndex(activeIndex + 1);
+                  }
+                }}>
                 Yes, keep it
               </Button>
               <Button size="sm" variant="outline" className="h-8 px-3 text-xs border-destructive text-destructive hover:bg-destructive/10"
@@ -894,8 +898,9 @@ function SowEngineerPageInner() {
   // Scrolls to the section containing the active question so the engineer
   // can see where the blank lives in the document while answering in the bar.
   function handleChangeQuestionIndex(index: number) {
-    setActiveQuestionIndex(index);
-    const question = questions[index];
+    const safeIndex = Math.max(0, Math.min(index, questions.length - 1));
+    setActiveQuestionIndex(safeIndex);
+    const question = questions[safeIndex];
     if (question) {
       document.getElementById(question.sectionId)?.scrollIntoView({ behavior: "smooth", block: "start" });
     }
