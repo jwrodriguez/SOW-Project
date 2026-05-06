@@ -154,6 +154,17 @@ export default function NewSOWPage() {
       router.push("/edit");
     };
 
+  const handleChange = (setter: (val: string) => void) =>
+  (
+    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>
+  ) => {
+    const value = e.target.value
+      .replace(/[^a-zA-Z0-9 \-]/g, "")
+      .replace(/\s+/g, " ");
+
+    setter(value);
+  };
+
 
   return (
     <SidebarProvider>
@@ -222,7 +233,7 @@ export default function NewSOWPage() {
                       id="documentName"
                       placeholder="e.g. HVAC Maintenance - Bldg 3001"
                       value={documentName}
-                      onChange={(e) => setDocumentName(e.target.value)}
+                      onChange={handleChange(setDocumentName)}
                       autoFocus
                     />
                     <p className="text-xs text-muted-foreground">
@@ -254,7 +265,7 @@ export default function NewSOWPage() {
                         id="projectNumber"
                         placeholder="SOW-2026-001"
                         value={projectNumber}
-                        onChange={(e) => setProjectNumber(e.target.value)}
+                        onChange={handleChange(setProjectNumber)}
                       />
                       <p className="text-xs text-muted-foreground">
                         This should be unique.
@@ -268,7 +279,7 @@ export default function NewSOWPage() {
                       id="description"
                       placeholder="Optional — brief summary of this SOW's purpose. This is the 'Project Overview' section in the sow editor."
                       value={description}
-                      onChange={(e) => setDescription(e.target.value)}
+                      onChange={handleChange(setDescription)}
                       rows={3}
                     />
                   </div>
@@ -296,7 +307,7 @@ export default function NewSOWPage() {
                       id="clientName"
                       placeholder="e.g. Universal Fuel Accessories Test Stand (UFATS)"
                       value={clientName}
-                      onChange={(e) => setClientName(e.target.value)}
+                      onChange={handleChange(setClientName)}
                     />
                   </div>
 
@@ -312,7 +323,7 @@ export default function NewSOWPage() {
                         id="building"
                         placeholder="e.g. 3001"
                         value={building}
-                        onChange={(e) => setBuilding(e.target.value)}
+                        onChange={handleChange(setBuilding)}
                       />
                     </div>
                     <div className="space-y-2">
@@ -326,7 +337,7 @@ export default function NewSOWPage() {
                         id="location"
                         placeholder="e.g. Tinker AFB, Oklahoma"
                         value={location}
-                        onChange={(e) => setLocation(e.target.value)}
+                        onChange={handleChange(setLocation)}
                       />
                     </div>
                   </div>
@@ -360,7 +371,7 @@ export default function NewSOWPage() {
                         id="preparedBy"
                         placeholder="Your Name or Group Name"
                         value={preparedBy}
-                        onChange={(e) => setPreparedBy(e.target.value)}
+                        onChange={handleChange(setPreparedBy)}
                       />
                     </div>
                     <div className="space-y-2">
@@ -374,7 +385,7 @@ export default function NewSOWPage() {
                         id="department"
                         placeholder="e.g. 76 MXSG/MXDEC"
                         value={department}
-                        onChange={(e) => setDepartment(e.target.value)}
+                        onChange={handleChange(setDepartment)}
                       />
                     </div>
                   </div>
@@ -391,7 +402,7 @@ export default function NewSOWPage() {
                         id="date"
                         type="date"
                         value={date}
-                        onChange={(e) => setDate(e.target.value)}
+                        onChange={handleChange(setDate)}
                       />
                     </div>
                     <div className="space-y-2">
