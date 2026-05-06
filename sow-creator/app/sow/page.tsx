@@ -633,7 +633,7 @@ function EngineerSectionContent({ content, fields, fieldValues, locked, onChange
 // ─── Engineer section block ───────────────────────────────────────────────────
 // Renders one section for the engineer. No hover toolbars, no admin controls.
 // lockEdit controls whether the content text is editable. Tables are editable.
-function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeContent, onChangeField, onFocusBlank, onAddSection, onAddTable, onDeleteSection, onUpdateCell, hoveredSectionId, setHoveredSectionId, children }: {
+function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeContent, onChangeField, onFocusBlank, onAddSection, onAddTable, onDeleteSection, onUpdateCell, onDeleteTable, hoveredSectionId, setHoveredSectionId, children }: {
   section: SectionNode;
   depth: number;
   fields: TemplateField[];
@@ -645,6 +645,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
   onAddTable: (sectionId: string, rows: number, cols: number) => void;
   onDeleteSection: (sectionId: string) => void;
   onUpdateCell: (tid: string, r: number, c: number, v: string) => void;
+  onDeleteTable: (tableId: string) => void;
   hoveredSectionId: string | null;
   setHoveredSectionId: (id: string | null) => void;
   children?: React.ReactNode;
@@ -715,8 +716,13 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
       {section.tables && section.tables.length > 0 && (
         <div style={{ marginLeft: `${32}px` }} className="mt-3 space-y-4">
           {section.tables.map(table => (
-            <table key={table.id} className="border-collapse text-xs w-full">
-              <tbody>
+            <div key={table.id}>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-xs text-gray-400 font-mono">{table.rows}×{table.cols} table</span>
+                <button onClick={() => onDeleteTable(table.id)} className="text-red-400 hover:text-red-600"><Trash2 className="h-3 w-3" /></button>
+              </div>
+              <table className="border-collapse text-xs w-full">
+                <tbody>
                   {table.data.map((row, ri) => (
                     <tr key={ri}>
                       {row.map((cell, ci) => (
@@ -727,8 +733,9 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
                       ))}
                     </tr>
                   ))}
-              </tbody>
-            </table>
+                </tbody>
+              </table>
+            </div>
           ))}
         </div>
       )}
@@ -1083,6 +1090,18 @@ function SowEngineerPageInner() {
     setData(p => ({ ...p, sections: addTable(p.sections, sectionId, rows, cols) }));
   }
 
+  // Deletes a table from the specified section.
+  function handleDeleteTable(tableId: string) {
+    function deleteTable(sections: SectionNode[], tableId: string): SectionNode[] {
+      return sections.map(s => ({
+        ...s,
+        tables: s.tables.filter(t => t.id !== tableId),
+        children: deleteTable(s.children, tableId)
+      }));
+    }
+    setData(p => ({ ...p, sections: deleteTable(p.sections, tableId) }));
+  }
+
   // Updates a cell in a table.
   function handleUpdateCell(tableId: string, row: number, col: number, value: string) {
     function updateCell(sections: SectionNode[], tableId: string, row: number, col: number, value: string): SectionNode[] {
@@ -1119,6 +1138,7 @@ function SowEngineerPageInner() {
         onFocusBlank={handleFocusBlank}
         onAddSection={handleAddSection}
         onAddTable={handleAddTable}
+        onDeleteTable={handleDeleteTable}
         onUpdateCell={handleUpdateCell}
         onDeleteSection={handleDeleteSection}
         hoveredSectionId={hoveredSectionId}
