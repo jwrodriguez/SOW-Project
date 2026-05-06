@@ -5,6 +5,27 @@
       "type": "text",
       "label": "blanks",
       "required": false
+    },
+    {
+      "id": "field_this_will_be_a_blank_1778083288885",
+      "type": "text",
+      "label": "This will be a blank",
+      "required": true,
+      "placeholder": "some things should go here"
+    },
+    {
+      "id": "field_this_will_be_another_blank_1778083312255",
+      "type": "paragraph",
+      "label": "This will be another blank",
+      "required": false,
+      "placeholder": "more things will go here"
+    },
+    {
+      "id": "field_and_another_blank_1778083336818",
+      "type": "number",
+      "label": "And another blank",
+      "required": true,
+      "placeholder": "More stuff goes here"
     }
   ],
   "sections": [
@@ -87,6 +108,93 @@
           "lockEdit": true,
           "lockDelete": true,
           "lockAddTable": true,
+          "lockAddSections": false
+        }
+      ],
+      "lockEdit": true,
+      "lockDelete": true,
+      "lockAddTable": true,
+      "lockAddSections": true
+    },
+    {
+      "id": "sec-1778082817324",
+      "title": "Varying Locks",
+      "number": "2.0",
+      "tables": [],
+      "content": "Here will be a display of various locks to show how the final sow may look, and how the user interacts with them.",
+      "children": [
+        {
+          "id": "sec-1778082852776",
+          "title": "boilerplate section",
+          "number": "2.1",
+          "tables": [],
+          "content": "This would be a manditory section. Think of the 'background' or 'scope' section. This '2.1' is required, but not all of 2.1.1,2.1.1.1, etc.",
+          "children": [
+            {
+              "id": "sec-1778082854930",
+              "title": "Required section with some blanks",
+              "number": "2.1.1",
+              "tables": [],
+              "content": "{{field_this_will_be_a_blank_1778083288885}}\n {{field_this_will_be_another_blank_1778083312255}}\n {{field_and_another_blank_1778083336818}}",
+              "children": [
+                {
+                  "id": "sec-1778082856986",
+                  "title": "Optional, deletable sub-section",
+                  "number": "2.1.1.1",
+                  "tables": [],
+                  "content": "This would be a fully optional sub-section. The user is allowed to delete this, or edit the text you see. This would be for sections that a user will have a heavy hand in, yet might not need for every sow.",
+                  "children": [],
+                  "lockEdit": false,
+                  "lockDelete": false,
+                  "lockAddTable": true,
+                  "lockAddSections": true
+                }
+              ],
+              "lockEdit": true,
+              "lockDelete": true,
+              "lockAddTable": true,
+              "lockAddSections": true
+            },
+            {
+              "id": "sec-1778082855106",
+              "title": "Another optional section, with tables allowed",
+              "number": "2.1.2",
+              "tables": [],
+              "content": "This is another optional section (it is deletable), but this time an engineer could add a table. This might be the permissions for a 'Government Furnished Properties' section, where not all sows will have this section, but when they do there will be a table or multiple tables added.",
+              "children": [],
+              "lockEdit": true,
+              "lockDelete": false,
+              "lockAddTable": false,
+              "lockAddSections": true
+            }
+          ],
+          "lockEdit": true,
+          "lockDelete": true,
+          "lockAddTable": true,
+          "lockAddSections": true
+        },
+        {
+          "id": "sec-1778082853321",
+          "title": "Optional section with optional sub-sections",
+          "number": "2.2",
+          "tables": [],
+          "content": "This section is not needed, but when it is the user will need to add sub-sections, and many of them. Think of the 'Manufacturing Requirements' section of a sow. Not every sow has that section, but the ones that do have many sub-sections, each having numerous more sub-sections.",
+          "children": [],
+          "lockEdit": true,
+          "lockDelete": false,
+          "lockAddTable": true,
+          "lockAddSections": false
+        },
+        {
+          "id": "sec-1778082854009",
+          "title": "Fully editable section",
+          "number": "2.3",
+          "tables": [],
+          "content": "This is the 'most variation' an engineer could have on a section. They could change this text, delete this whole section, add tables to it, or add sub-sections. This is the \"Most Unlocked\" section.",
+          "children": [],
+          "lockEdit": false,
+          "lockDelete": false,
+          "lockAddTable": false,
           "lockAddSections": false
         }
       ],
