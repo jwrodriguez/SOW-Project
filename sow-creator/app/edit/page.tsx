@@ -49,7 +49,7 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "text", label: "Text" }, { value: "number", label: "Number" },
   { value: "word", label: "Word" }, { value: "sentence", label: "Sentence" },
   { value: "paragraph", label: "Paragraph" }, { value: "list", label: "List" },
-  { value: "date", label: "Date" },
+  { value: "date", label: "Date" }, { value: "dropdown", label: "Dropdown" },
 ];
 
 // ============= RIBBON BUTTON =============
@@ -673,9 +673,16 @@ function SowEditPageInner() {
   const [blankType, setBlankType] = useState<FieldType>("text");
   const [blankPlaceholder, setBlankPlaceholder] = useState("");
   const [blankRequired, setBlankRequired] = useState(false);
+  // Comma-separated option values used when blankType === "dropdown"
+  const [blankOptions, setBlankOptions] = useState("");
 
   // Blank editing state
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+  // Raw comma-separated string for the options input in the edit panel.
+  // Kept separate from field.options so the user can type freely (including
+  // commas) without every keystroke splitting and rejoining the array.
+  // Committed to field.options only on blur.
+  const [rawOptionsText, setRawOptionsText] = useState("");
 
   const selectedSection = selectedSectionId ? findSection(data.sections, selectedSectionId) : null;
 
@@ -741,9 +748,14 @@ function SowEditPageInner() {
   function handleInsertBlank() {
     if (!blankLabel.trim() || !selectedSectionId) return;
     const fieldId = `field_${blankLabel.trim().toLowerCase().replace(/\s+/g, "_")}_${Date.now()}`;
+    // Parse comma-separated options string into a trimmed array for dropdown type
+    const parsedOptions = blankType === "dropdown"
+      ? blankOptions.split(",").map(o => o.trim()).filter(Boolean)
+      : undefined;
     const newField: TemplateField = {
       id: fieldId, label: blankLabel.trim(), type: blankType,
       placeholder: blankPlaceholder || undefined, required: blankRequired,
+      ...(parsedOptions && parsedOptions.length > 0 ? { options: parsedOptions } : {}),
     };
     setData(p => {
       const sec = findSection(p.sections, selectedSectionId);
@@ -754,7 +766,7 @@ function SowEditPageInner() {
         sections: updateSection(p.sections, selectedSectionId, { content: newContent }),
       };
     });
-    setBlankLabel(""); setBlankPlaceholder(""); setBlankRequired(false);
+    setBlankLabel(""); setBlankPlaceholder(""); setBlankRequired(false); setBlankOptions("");
     setShowBlankForm(false);
   }
 
@@ -872,6 +884,13 @@ function SowEditPageInner() {
 
   const tocData = generateTOCEntries(data.sections);
   const editingField = editingFieldId ? data.fields.find(f => f.id === editingFieldId) : null;
+
+  // When the user opens a different blank to edit, seed the raw options text
+  // from that field's current options array so they see the existing values.
+  // This also resets it when they close the panel (editingFieldId = null).
+  useEffect(() => {
+    setRawOptionsText(editingField?.options?.join(", ") ?? "");
+  }, [editingFieldId]); // intentionally only on id change, not every field update
 
   const handleReturnToNewForm = () => {
     router.push("/login");
@@ -1009,18 +1028,32 @@ function SowEditPageInner() {
 
               {/* ── Insert Blank Form (shown below ribbon) ── */}
               {showBlankForm && (
-                <div className="bg-muted/50 border-b px-4 py-3 flex items-end gap-3 shrink-0">
+                <div className="bg-muted/50 border-b px-4 py-3 flex items-end gap-3 shrink-0 flex-wrap">
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-medium text-muted-foreground uppercase">Label *</label>
                     <Input value={blankLabel} onChange={e => setBlankLabel(e.target.value)} placeholder="e.g. Project Name" className="h-8 w-40 text-sm" autoFocus />
                   </div>
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-medium text-muted-foreground uppercase">Type</label>
-                    <select value={blankType} onChange={e => setBlankType(e.target.value as FieldType)}
+                    <select value={blankType} onChange={e => { setBlankType(e.target.value as FieldType); setBlankOptions(""); }}
                       className="h-8 rounded border border-input bg-background px-2 text-sm">
                       {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                   </div>
+                  {/* Options field — only visible when type is dropdown */}
+                  {blankType === "dropdown" && (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase">
+                        Options <span className="normal-case text-[9px]">(comma-separated)</span>
+                      </label>
+                      <Input
+                        value={blankOptions}
+                        onChange={e => setBlankOptions(e.target.value)}
+                        placeholder="Option A, Option B, Option C"
+                        className="h-8 w-56 text-sm"
+                      />
+                    </div>
+                  )}
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-medium text-muted-foreground uppercase">Placeholder</label>
                     <Input value={blankPlaceholder} onChange={e => setBlankPlaceholder(e.target.value)} placeholder="Hint text..." className="h-8 w-32 text-sm" />
@@ -1032,7 +1065,7 @@ function SowEditPageInner() {
                   <Button size="sm" className="h-8 gap-1" onClick={handleInsertBlank} disabled={!blankLabel.trim()}>
                     <Check className="h-3 w-3" /> Insert
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-8" onClick={() => setShowBlankForm(false)}>
+                  <Button size="sm" variant="ghost" className="h-8" onClick={() => { setShowBlankForm(false); setBlankOptions(""); }}>
                     <X className="h-3 w-3" />
                   </Button>
                 </div>
@@ -1040,7 +1073,7 @@ function SowEditPageInner() {
 
               {/* ── Edit Blank Properties (shown below ribbon when editing a blank) ── */}
               {editingField && (
-                <div className="bg-blue-50/50 dark:bg-blue-950/20 border-b px-4 py-3 flex items-end gap-3 shrink-0">
+                <div className="bg-blue-50/50 dark:bg-blue-950/20 border-b px-4 py-3 flex items-end gap-3 shrink-0 flex-wrap">
                   <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 mr-2">
                     Editing blank:
                     <span className="blank-chip" data-type={editingField.type} style={{ cursor: "default" }}>
@@ -1058,6 +1091,25 @@ function SowEditPageInner() {
                       {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
                     </select>
                   </div>
+                  {/* Options editor — only shown when the field type is dropdown */}
+                  {editingField.type === "dropdown" && (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase">
+                        Options <span className="normal-case text-[9px]">(comma-separated)</span>
+                      </label>
+                      <Input
+                        value={rawOptionsText}
+                        onChange={e => setRawOptionsText(e.target.value)}
+                        onBlur={() =>
+                          handleUpdateField(editingField.id, {
+                            options: rawOptionsText.split(",").map(o => o.trim()).filter(Boolean),
+                          })
+                        }
+                        placeholder="Option A, Option B, Option C"
+                        className="h-8 w-56 text-sm"
+                      />
+                    </div>
+                  )}
                   <div className="flex flex-col gap-1">
                     <label className="text-[10px] font-medium text-muted-foreground uppercase">Placeholder</label>
                     <Input value={editingField.placeholder || ""} onChange={e => handleUpdateField(editingField.id, { placeholder: e.target.value })} className="h-8 w-32 text-sm" />
