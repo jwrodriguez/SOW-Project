@@ -629,7 +629,7 @@ function EngineerSectionContent({ content, fields, fieldValues, locked, onChange
 // ─── Engineer section block ───────────────────────────────────────────────────
 // Renders one section for the engineer. No hover toolbars, no admin controls.
 // lockEdit controls whether the content text is editable. Tables are read-only.
-function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeContent, onChangeField, onFocusBlank, children }: {
+function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeContent, onChangeField, onFocusBlank, onAddSection, onDeleteSection, hoveredSectionId, setHoveredSectionId, children }: {
   section: SectionNode;
   depth: number;
   fields: TemplateField[];
@@ -637,14 +637,29 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
   onChangeContent: (sectionId: string, value: string) => void;
   onChangeField: (fieldId: string, value: string) => void;
   onFocusBlank: (fieldId: string) => void;
+  onAddSection: (parentId: string) => void;
+  onDeleteSection: (sectionId: string) => void;
+  hoveredSectionId: string | null;
+  setHoveredSectionId: (id: string | null) => void;
   children?: React.ReactNode;
 }) {
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const headingClass = depth === 0 ? "text-2xl font-bold" : depth === 1 ? "text-xl font-semibold" : "text-lg font-medium";
   const indent = depth * 16;
   const isUnlocked = !(section.lockEdit && section.lockDelete && section.lockAddSections && section.lockAddTable)
 
   return (
-    <div id={section.id} style={{ marginLeft: `${indent}px`, marginBottom: depth === 0 ? "2rem" : "1.25rem" }}>
+    <div id={section.id} style={{ marginLeft: `${indent}px`, marginBottom: depth === 0 ? "2rem" : "1.25rem" }} className="relative" onMouseMove={(e) => {
+      let target = e.target as HTMLElement;
+      while (target && target !== e.currentTarget) {
+        if (target.id && target.id.startsWith('sec-')) {
+          setHoveredSectionId(target.id);
+          return;
+        }
+        target = target.parentElement!;
+      }
+      setHoveredSectionId(section.id);
+    }} onMouseLeave={() => setHoveredSectionId(null)}>
       <div className="flex items-baseline gap-2 mb-1">
         {!isUnlocked && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
         {isUnlocked && (section.lockEdit || section.lockDelete || section.lockAddSections || section.lockAddTable) && (
@@ -694,6 +709,24 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
         </div>
       )}
       {children}
+      {hoveredSectionId === section.id && (
+        <div className="absolute top-0 right-0 bg-white border border-gray-300 rounded shadow-lg p-2 z-10">
+          {showDeleteConfirm ? (
+            <div className="flex flex-col gap-2">
+              <span className="text-sm">Do you need the "{section.title}" section?</span>
+              <div className="flex gap-1">
+                <Button size="sm" onClick={() => setShowDeleteConfirm(false)}>Yes, keep it</Button>
+                <Button size="sm" variant="destructive" onClick={() => { onDeleteSection(section.id); setShowDeleteConfirm(false); }}>No, delete it</Button>
+              </div>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1">
+              {!section.lockAddSections && <Button size="sm" onClick={() => onAddSection(section.id)}>Add Subsection</Button>}
+              {!section.lockDelete && <Button size="sm" variant="destructive" onClick={() => setShowDeleteConfirm(true)}>Delete Section</Button>}
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -851,6 +884,9 @@ function SowEngineerPageInner() {
   // When the engineer moves to a new question the document scrolls to that section.
   const [activeQuestionIndex, setActiveQuestionIndex] = useState(0);
 
+  // Hovered section ID to manage popup visibility (only deepest hovered section shows popup)
+  const [hoveredSectionId, setHoveredSectionId] = useState<string | null>(null);
+
   // Ordered list of questions derived from the section tree and fields array.
   // Recomputed whenever data changes (e.g. after loading a new draft).
   const questions = useMemo(() => buildQuestionList(data.sections, data.fields), [data.sections, data.fields]);
@@ -982,6 +1018,35 @@ function SowEngineerPageInner() {
     setActiveQuestionIndex(prev => Math.max(0, prev - 1));
   }
 
+  // Adds a new subsection to the specified parent section.
+  function handleAddSection(parentId: string) {
+    function addSection(sections: SectionNode[], parentId: string): SectionNode[] {
+      return sections.map(s => {
+        if (s.id === parentId) {
+          const newId = `${s.id}-child-${Date.now()}`;
+          const baseNumber = s.number.replace(/\.0$/, '');
+          const newNumber = `${baseNumber}.${s.children.length + 1}`;
+          const newSection: SectionNode = {
+            id: newId,
+            number: newNumber,
+            title: 'New Subsection',
+            content: '',
+            lockEdit: false,
+            lockDelete: false,
+            lockAddSections: false,
+            lockAddTable: false,
+            tables: [],
+            children: []
+          };
+          return { ...s, children: [...s.children, newSection] };
+        } else {
+          return { ...s, children: addSection(s.children, parentId) };
+        }
+      });
+    }
+    setData(p => ({ ...p, sections: addSection(p.sections, parentId) }));
+  }
+
   // When the engineer clicks a blank in the document preview, find its question
   // index and update the questionnaire bar to show that question.
   function handleFocusBlank(fieldId: string) {
@@ -1001,6 +1066,10 @@ function SowEngineerPageInner() {
         onChangeContent={handleChangeContent}
         onChangeField={handleChangeField}
         onFocusBlank={handleFocusBlank}
+        onAddSection={handleAddSection}
+        onDeleteSection={handleDeleteSection}
+        hoveredSectionId={hoveredSectionId}
+        setHoveredSectionId={setHoveredSectionId}
       >
         {section.children.length > 0 && renderSections(section.children, depth + 1)}
       </EngineerSectionBlock>
