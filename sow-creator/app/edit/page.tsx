@@ -16,6 +16,15 @@ import { useSearchParams } from "next/navigation";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { useSession } from "@/lib/auth-client";
 import { useRouter } from "next/navigation";
 
@@ -27,6 +36,13 @@ import {
   Type,
   SquarePlus,
   Grid2X2Plus,
+  Link2,
+  AlignLeft,
+  CalendarDays,
+  Hash,
+  List,
+  Pilcrow,
+  WholeWord,
 } from "lucide-react";
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -41,7 +57,6 @@ import { CSS } from "@dnd-kit/utilities";
 // You can find Type Declarations and Descriptions used in .../types/pageTypes.ts
 import {FieldType, TemplateField, SectionNode, TableData, HeaderFooterData, TemplateData} from "@/types/pageTypes";
 import { saveGlobalTemplate } from "@/lib/db-upsert";
-import { get } from "http";
 import { getGlobalTemplate } from "@/lib/db-pullTemp";
 
 // Allowed field types listed here so both the insert form and edit form share the same options
@@ -51,6 +66,16 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "paragraph", label: "Paragraph" }, { value: "list", label: "List" },
   { value: "date", label: "Date" },
 ];
+
+const FIELD_TYPE_META: Record<FieldType, { icon: LucideIcon; shortLabel: string }> = {
+  text: { icon: Type, shortLabel: "Text" },
+  number: { icon: Hash, shortLabel: "Number" },
+  word: { icon: WholeWord, shortLabel: "Word" },
+  sentence: { icon: AlignLeft, shortLabel: "Sentence" },
+  paragraph: { icon: Pilcrow, shortLabel: "Paragraph" },
+  list: { icon: List, shortLabel: "List" },
+  date: { icon: CalendarDays, shortLabel: "Date" },
+};
 
 // ============= RIBBON BUTTON =============
 // Reusable button for the editing ribbon toolbar.
@@ -131,9 +156,9 @@ export function EditableArea({ value, onChange, className = "", placeholder = "C
     </div>
   );
   return editing ? (
-    <textarea autoFocus value={value} onChange={e => onChange(e.target.value)}
+    <Textarea autoFocus value={value} onChange={e => onChange(e.target.value)}
       onBlur={() => setEditing(false)} rows={Math.max(3, (value.match(/\n/g) || []).length + 2)}
-      className={`bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full resize-none ${className}`} />
+      className={`min-h-[7rem] bg-blue-50 border-blue-300 px-2 py-1 leading-relaxed whitespace-pre-wrap ${className}`} />
   ) : (
     <div onClick={() => setEditing(true)}
       className={`cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 whitespace-pre-wrap min-h-[1.2em] ${className}`}>
@@ -160,9 +185,9 @@ export function EditableFooterZone({ value, onChange, pageNumber, className = ""
 }) {
   const [editing, setEditing] = useState(false);
   return editing ? (
-    <textarea autoFocus value={value} onChange={e => onChange(e.target.value)}
+    <Textarea autoFocus value={value} onChange={e => onChange(e.target.value)}
       onBlur={() => setEditing(false)} rows={Math.max(1, (value.match(/\n/g) || []).length + 1)}
-      className={`bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full resize-none text-sm ${className}`} />
+      className={`min-h-9 bg-blue-50 border-blue-300 px-2 py-1 text-sm leading-relaxed whitespace-pre-wrap ${className}`} />
   ) : (
     <div onClick={() => setEditing(true)}
       className={`cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 whitespace-pre-wrap min-h-[1.2em] text-sm ${className}`}>
@@ -176,17 +201,28 @@ export function EditableFooterZone({ value, onChange, pageNumber, className = ""
 // Renders a fillable blank as a colored inline pill inside section content.
 // Color is driven by the data-type attribute and CSS in globals.css (.blank-chip styles).
 // Clicking opens the blank's property editor in the ribbon. X removes it.
-function BlankChip({ field, onClick, onDelete }: {
-  field: TemplateField; onClick: () => void; onDelete: () => void;
+function BlankChip({ field, onClick, onRemove, occurrenceCount = 1, removable = true }: {
+  field: TemplateField; onClick: () => void; onRemove: () => void; occurrenceCount?: number; removable?: boolean;
 }) {
+  const TypeIcon = FIELD_TYPE_META[field.type].icon;
   return (
-    <span className="blank-chip" data-type={field.type} onClick={onClick}>
+    <span className="blank-chip" data-type={field.type} onClick={onClick} title={occurrenceCount > 1 ? "Shared field. Editing this blank updates every matching occurrence." : "Blank field"}>
+      <span className="blank-chip-icon" aria-hidden="true">
+        <TypeIcon className="h-3 w-3" />
+      </span>
       <span>{field.label}</span>
-      <span className="opacity-60 text-[10px]">({field.type})</span>
-      <button onClick={e => { e.stopPropagation(); onDelete(); }}
-        className="ml-0.5 opacity-40 hover:opacity-100 transition-opacity" title="Remove blank">
-        <X className="h-3 w-3" />
-      </button>
+      {occurrenceCount > 1 && (
+        <span className="inline-flex items-center gap-0.5 rounded-full bg-black/10 px-1 text-[10px] font-medium">
+          <Link2 className="h-2.5 w-2.5" />
+          {occurrenceCount}
+        </span>
+      )}
+      {removable && (
+        <button onClick={e => { e.stopPropagation(); onRemove(); }}
+          className="ml-0.5 opacity-40 hover:opacity-100 transition-opacity" title="Remove this occurrence">
+          <X className="h-3 w-3" />
+        </button>
+      )}
     </span>
   );
 }
@@ -195,10 +231,12 @@ function BlankChip({ field, onClick, onDelete }: {
 // Parses the section content string for {{field_id}} tokens and renders them as BlankChips.
 // Plain text between tokens renders as normal spans.
 // When unlocked: click-to-edit textarea. When locked: static text with interactive blank chips.
-function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, onChange, className = "text-sm leading-relaxed", placeholder = "Click to add content..." }: {
+function SectionContent({ content, fields, locked, onClickBlank, onChange, fieldUsageCounts, allowBlankRemoval = true, className = "text-sm leading-relaxed", placeholder = "Click to add content..." }: {
   content: string; fields: TemplateField[]; locked: boolean;
-  onClickBlank: (fieldId: string) => void; onDeleteBlank: (fieldId: string) => void;
+  onClickBlank: (fieldId: string) => void;
   onChange: (v: string) => void;
+  fieldUsageCounts?: Map<string, number>;
+  allowBlankRemoval?: boolean;
   className?: string;
   placeholder?: string;
 }) {
@@ -206,13 +244,13 @@ function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, 
 
   // Parse content into segments: text and {{field_id}} tokens
   const segments = useMemo(() => {
-    const parts: Array<{ type: "text"; value: string } | { type: "blank"; fieldId: string }> = [];
+    const parts: Array<{ type: "text"; value: string } | { type: "blank"; fieldId: string; start: number; end: number }> = [];
     const regex = /\{\{([^}]+)\}\}/g;
     let last = 0;
     let match;
     while ((match = regex.exec(content)) !== null) {
       if (match.index > last) parts.push({ type: "text", value: content.slice(last, match.index) });
-      parts.push({ type: "blank", fieldId: match[1] });
+      parts.push({ type: "blank", fieldId: match[1], start: match.index, end: match.index + match[0].length });
       last = match.index + match[0].length;
     }
     if (last < content.length) parts.push({ type: "text", value: content.slice(last) });
@@ -221,22 +259,45 @@ function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, 
   }, [content]);
 
   const [editing, setEditing] = useState(false);
+  const removeOccurrence = (start: number, end: number) => {
+    const hasSpaceBefore = content[start - 1] === " ";
+    const hasSpaceAfter = content[end] === " ";
+    const adjustedStart = hasSpaceBefore && hasSpaceAfter ? start - 1 : start;
+    onChange(content.slice(0, adjustedStart) + content.slice(end));
+  };
+  const renderSegments = (removable: boolean) => segments.map((seg, i) => {
+    if (seg.type === "text") return <span key={i}>{seg.value}</span>;
+    const field = fieldMap.get(seg.fieldId);
+    if (!field) return <span key={i} className="text-red-400">{`{{${seg.fieldId}}}`}</span>;
+    return (
+      <BlankChip
+        key={i}
+        field={field}
+        occurrenceCount={fieldUsageCounts?.get(field.id) ?? 1}
+        onClick={() => onClickBlank(field.id)}
+        onRemove={() => removeOccurrence(seg.start, seg.end)}
+        removable={removable && allowBlankRemoval}
+      />
+    );
+  });
 
   // If unlocked, show raw editable content
   if (!locked) {
     return editing ? (
-      <textarea autoFocus value={content} onChange={e => onChange(e.target.value)}
-        onBlur={() => setEditing(false)} rows={Math.max(1, (content.match(/\n/g) || []).length + 1)}
-        className={`bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full resize-none ${className}`} />
+      <div className="space-y-1.5">
+        <Textarea autoFocus value={content} onChange={e => onChange(e.target.value)}
+          onBlur={() => setEditing(false)} rows={Math.max(4, (content.match(/\n/g) || []).length + 2)}
+          className={`min-h-[7rem] bg-blue-50 border-blue-300 px-2 py-1 leading-relaxed whitespace-pre-wrap ${className}`} />
+        {content.includes("{{") && (
+          <div className={`rounded border border-dashed border-blue-200 bg-blue-50/40 px-2 py-1.5 whitespace-pre-wrap min-h-[1.2em] ${className}`}>
+            {renderSegments(false)}
+          </div>
+        )}
+      </div>
     ) : (
       <div onClick={() => setEditing(true)}
         className={`cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200 whitespace-pre-wrap min-h-[1.2em] ${className}`}>
-        {segments.map((seg, i) => {
-          if (seg.type === "text") return <span key={i}>{seg.value}</span>;
-          const field = fieldMap.get(seg.fieldId);
-          if (!field) return <span key={i} className="text-red-400">{`{{${seg.fieldId}}}`}</span>;
-          return <BlankChip key={i} field={field} onClick={() => onClickBlank(field.id)} onDelete={() => onDeleteBlank(field.id)} />;
-        })}
+        {renderSegments(true)}
         {!content && <span className="text-gray-400 italic font-normal">{placeholder}</span>}
       </div>
     );
@@ -245,12 +306,7 @@ function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, 
   // Locked: render static text with blank chips
   return (
     <div className={`whitespace-pre-wrap min-h-[1.2em] px-1 ${className}`}>
-      {segments.map((seg, i) => {
-        if (seg.type === "text") return <span key={i}>{seg.value}</span>;
-        const field = fieldMap.get(seg.fieldId);
-        if (!field) return <span key={i} className="text-red-400">{`{{${seg.fieldId}}}`}</span>;
-        return <BlankChip key={i} field={field} onClick={() => onClickBlank(field.id)} onDelete={() => onDeleteBlank(field.id)} />;
-      })}
+      {renderSegments(true)}
       {!content && <span className="text-gray-400 italic font-normal">No content — insert blanks or unlock to edit.</span>}
     </div>
   );
@@ -266,9 +322,9 @@ function SectionContent({ content, fields, locked, onClickBlank, onDeleteBlank, 
  * 
  * @returns A JSX Element component serving as a template/design for a specific page of the document with editable header footer areas
  */
-export function DocumentPage({ hf, onHF, pageNumber, fields, onClickBlank, onDeleteBlank, children }: {
+export function DocumentPage({ hf, onHF, pageNumber, fields = [], fieldUsageCounts, onClickBlank = () => {}, children }: {
   hf: HeaderFooterData; onHF: (k: keyof HeaderFooterData, v: string) => void; pageNumber: number;
-  fields: TemplateField[]; onClickBlank: (id: string) => void; onDeleteBlank: (id: string) => void;
+  fields?: TemplateField[]; fieldUsageCounts?: Map<string, number>; onClickBlank?: (id: string) => void;
   children: React.ReactNode;
 }) {
   const resolve = (text: string) => text.replace("{PAGE}", String(pageNumber));
@@ -279,8 +335,8 @@ export function DocumentPage({ hf, onHF, pageNumber, fields, onClickBlank, onDel
       fields={fields}
       locked={false}
       onClickBlank={onClickBlank}
-      onDeleteBlank={onDeleteBlank}
       onChange={v => onHF(k, v)}
+      fieldUsageCounts={fieldUsageCounts}
       className={className}
       placeholder={placeholder}
     />
@@ -328,9 +384,10 @@ export function DocumentPage({ hf, onHF, pageNumber, fields, onClickBlank, onDel
  */
 export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fields,
   onSelect, onUpdate, onAddChild, onAddSibling, onDelete, onToggleLock,
-  onAddTable, onDeleteTable, onUpdateCell, onClickBlank, onDeleteBlank, children }: {
+  onAddTable, onDeleteTable, onUpdateCell, onClickBlank, fieldUsageCounts, children }: {
   section: SectionNode; depth: number; isOnlyTop: boolean; isSelected: boolean;
   fields: TemplateField[];
+  fieldUsageCounts?: Map<string, number>;
   onSelect: () => void;
   onUpdate: (u: Partial<SectionNode>) => void;
   onAddChild: () => void; onAddSibling: () => void; onDelete: () => void;
@@ -338,7 +395,8 @@ export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fi
   onAddTable: (r: number, c: number) => void;
   onDeleteTable: (id: string) => void;
   onUpdateCell: (tid: string, r: number, c: number, v: string) => void;
-  onClickBlank: (fieldId: string) => void; onDeleteBlank: (fieldId: string) => void;
+  onClickBlank: (fieldId: string) => void;
+  onDeleteBlank?: (fieldId: string) => void;
   children?: React.ReactNode;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: section.id });
@@ -420,7 +478,8 @@ export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fi
       {/* Section body — uses SectionContent for blank rendering */}
       <div className="ml-8" style={{ marginLeft: `${depth * 16 + 32}px` }}>
         <SectionContent content={section.content} fields={fields} locked={false /*section.locked*/}
-          onClickBlank={onClickBlank} onDeleteBlank={onDeleteBlank}
+          onClickBlank={onClickBlank}
+          fieldUsageCounts={fieldUsageCounts}
           onChange={v => onUpdate({ content: v })} />
       </div>
 
@@ -574,6 +633,34 @@ function removeBlankFromContent(sections: SectionNode[], fieldId: string): Secti
   }));
 }
 
+function countFieldOccurrences(data: TemplateData) {
+  const counts = new Map<string, number>();
+  const countInText = (text: string) => {
+    for (const match of text.matchAll(/\{\{([^}]+)\}\}/g)) {
+      const fieldId = match[1];
+      counts.set(fieldId, (counts.get(fieldId) ?? 0) + 1);
+    }
+  };
+  const walkSections = (sections: SectionNode[]) => {
+    sections.forEach(section => {
+      countInText(section.content);
+      section.tables?.forEach(table => table.data.forEach(row => row.forEach(countInText)));
+      walkSections(section.children);
+    });
+  };
+
+  Object.values(data.headerFooter).forEach(value => {
+    if (typeof value === "string") countInText(value);
+  });
+  walkSections(data.sections);
+
+  return counts;
+}
+
+function appendFieldToken(content: string, fieldId: string) {
+  return content ? `${content} {{${fieldId}}}` : `{{${fieldId}}}`;
+}
+
 // ============= MAIN COMPONENT (inner) =============
 // Split from the default export so useSearchParams() can be wrapped in Suspense (required by Next.js).
 // All document state, blank state, DnD state, and render functions live here.
@@ -706,11 +793,23 @@ function SowEditPageInner() {
   const [blankType, setBlankType] = useState<FieldType>("text");
   const [blankPlaceholder, setBlankPlaceholder] = useState("");
   const [blankRequired, setBlankRequired] = useState(false);
+  const [reusedFieldId, setReusedFieldId] = useState("");
+  const [reuseSearch, setReuseSearch] = useState("");
+  const [showReuseOptions, setShowReuseOptions] = useState(false);
 
   // Blank editing state
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
 
   const selectedSection = selectedSectionId ? findSection(data.sections, selectedSectionId) : null;
+  const reusableFields = useMemo(() => {
+    const query = reuseSearch.trim().toLowerCase();
+    return data.fields.filter(field => {
+      if (!query) return true;
+      return [field.label, field.type, field.placeholder, field.defaultValue, field.id]
+        .filter(Boolean)
+        .some(value => String(value).toLowerCase().includes(query));
+    });
+  }, [data.fields, reuseSearch]);
 
   // DnD sensors - PointerSensor requires 5px movement before activating to avoid accidental drags
   const sensors = useSensors(
@@ -778,7 +877,7 @@ function SowEditPageInner() {
     };
     setData(p => {
       const sec = findSection(p.sections, selectedSectionId);
-      const newContent = sec ? (sec.content ? sec.content + ` {{${fieldId}}}` : `{{${fieldId}}}`) : "";
+      const newContent = sec ? appendFieldToken(sec.content, fieldId) : "";
       return {
         ...p,
         fields: [...p.fields, newField],
@@ -786,6 +885,26 @@ function SowEditPageInner() {
       };
     });
     setBlankLabel(""); setBlankPlaceholder(""); setBlankRequired(false);
+    setShowBlankForm(false);
+  }
+
+  function handleInsertExistingBlank() {
+    if (!reusedFieldId || !selectedSectionId) return;
+
+    setData(p => {
+      const sec = findSection(p.sections, selectedSectionId);
+      if (!sec || !p.fields.some(field => field.id === reusedFieldId)) return p;
+
+      return {
+        ...p,
+        sections: updateSection(p.sections, selectedSectionId, {
+          content: appendFieldToken(sec.content, reusedFieldId),
+        }),
+      };
+    });
+    setReusedFieldId("");
+    setReuseSearch("");
+    setShowReuseOptions(false);
     setShowBlankForm(false);
   }
 
@@ -865,11 +984,12 @@ function SowEditPageInner() {
               isOnlyTop={depth === 0 && data.sections.length === 1}
               isSelected={selectedSectionId === section.id}
               fields={data.fields}
+              fieldUsageCounts={fieldUsageCounts}
               onSelect={() => setSelectedSectionId(section.id)}
               onUpdate={onUpdate} onAddChild={onAddChild} onAddSibling={onAddSibling}
               onDelete={onDelete} onToggleLock={onToggleLock}
               onAddTable={onAddTable} onDeleteTable={onDeleteTable} onUpdateCell={onUpdateCell}
-              onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank}>
+              onClickBlank={id => setEditingFieldId(id)}>
               {section.children.length > 0 && renderSections(section.children, depth + 1)}
             </SortableSectionBlock>
           );
@@ -903,6 +1023,7 @@ function SowEditPageInner() {
 
   const tocData = generateTOCEntries(data.sections);
   const editingField = editingFieldId ? data.fields.find(f => f.id === editingFieldId) : null;
+  const fieldUsageCounts = useMemo(() => countFieldOccurrences(data), [data]);
 
   const handleReturnToNewForm = () => {
     router.push("/login");
@@ -962,7 +1083,7 @@ function SowEditPageInner() {
               {/* ── Frosted Editing Ribbon ── */}
               {/* Sticky toolbar above the document. Groups: File, Insert, Lock, Delete. */}
               {/* Buttons requiring a selection are disabled when selectedSection is null. */}
-              <div className="editor-ribbon sticky top-0 z-30 px-3 py-1.5 flex items-center gap-1 shrink-0">
+              <div className="editor-ribbon sticky top-0 z-30 px-3 py-1.5 flex items-center gap-1 shrink-0" onClick={e => e.stopPropagation()}>
                 {/* File group */}
                 <RibbonBtn icon={Save} label="Save" onClick={handleSave} />
                 {/* <RibbonBtn icon={Download} label="Load" onClick={handleLoadJSON} />
@@ -1040,28 +1161,91 @@ function SowEditPageInner() {
 
               {/* ── Insert Blank Form (shown below ribbon) ── */}
               {showBlankForm && (
-                <div className="bg-muted/50 border-b px-4 py-3 flex items-end gap-3 shrink-0">
+                <div className="bg-muted/50 border-b px-4 py-3 flex flex-wrap items-end gap-3 shrink-0" onClick={e => e.stopPropagation()}>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Label *</label>
-                    <Input value={blankLabel} onChange={e => setBlankLabel(e.target.value)} placeholder="e.g. Project Name" className="h-8 w-40 text-sm" autoFocus />
+                    <Label className="text-[10px] font-medium text-muted-foreground uppercase">New field label *</Label>
+                    <Input value={blankLabel} onChange={e => setBlankLabel(e.target.value)} placeholder="e.g. Project Name" className="h-8 w-44 text-sm" autoFocus />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Type</label>
-                    <select value={blankType} onChange={e => setBlankType(e.target.value as FieldType)}
-                      className="h-8 rounded border border-input bg-background px-2 text-sm">
-                      {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
+                    <Label className="text-[10px] font-medium text-muted-foreground uppercase">Type</Label>
+                    <Select value={blankType} onValueChange={value => setBlankType(value as FieldType)}>
+                      <SelectTrigger size="sm" className="h-8 w-36 rounded-md bg-background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FIELD_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Placeholder</label>
+                    <Label className="text-[10px] font-medium text-muted-foreground uppercase">Placeholder</Label>
                     <Input value={blankPlaceholder} onChange={e => setBlankPlaceholder(e.target.value)} placeholder="Hint text..." className="h-8 w-32 text-sm" />
                   </div>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                  <Label className="flex items-center gap-1.5 text-xs cursor-pointer pb-2">
                     <input type="checkbox" checked={blankRequired} onChange={e => setBlankRequired(e.target.checked)} className="rounded" />
                     Required
-                  </label>
+                  </Label>
                   <Button size="sm" className="h-8 gap-1" onClick={handleInsertBlank} disabled={!blankLabel.trim()}>
-                    <Check className="h-3 w-3" /> Insert
+                    <Check className="h-3 w-3" /> Create
+                  </Button>
+                  <div className="mx-1 h-8 w-px bg-border" />
+                  <div className="relative flex flex-col gap-1">
+                    <Label className="text-[10px] font-medium text-muted-foreground uppercase">Reuse existing field</Label>
+                    <Input
+                      value={reuseSearch}
+                      onFocus={() => setShowReuseOptions(true)}
+                      onChange={e => {
+                        setReuseSearch(e.target.value);
+                        setReusedFieldId("");
+                        setShowReuseOptions(true);
+                      }}
+                      onKeyDown={e => {
+                        if (e.key === "Escape") setShowReuseOptions(false);
+                        if (e.key === "Enter" && reusableFields[0]) {
+                          e.preventDefault();
+                          setReusedFieldId(reusableFields[0].id);
+                          setReuseSearch(reusableFields[0].label);
+                          setShowReuseOptions(false);
+                        }
+                      }}
+                      placeholder="Search shared fields..."
+                      className="h-8 w-64 text-sm"
+                    />
+                    {showReuseOptions && (
+                      <div className="absolute left-0 top-full z-50 mt-1 max-h-72 w-80 overflow-y-auto rounded-lg border bg-popover p-1 text-popover-foreground shadow-lg">
+                        {reusableFields.length > 0 ? reusableFields.map(field => {
+                          const TypeIcon = FIELD_TYPE_META[field.type].icon;
+                          return (
+                            <button
+                              key={field.id}
+                              type="button"
+                              className={`flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-accent ${reusedFieldId === field.id ? "bg-accent" : ""}`}
+                              onMouseDown={e => e.preventDefault()}
+                              onClick={() => {
+                                setReusedFieldId(field.id);
+                                setReuseSearch(field.label);
+                                setShowReuseOptions(false);
+                              }}
+                            >
+                              <span className="blank-chip" data-type={field.type} style={{ cursor: "default" }}>
+                                <span className="blank-chip-icon" aria-hidden="true">
+                                  <TypeIcon className="h-3 w-3" />
+                                </span>
+                                <span>{field.label}</span>
+                              </span>
+                              <span className="ml-auto shrink-0 text-xs text-muted-foreground">
+                                {fieldUsageCounts.get(field.id) ?? 0} used
+                              </span>
+                            </button>
+                          );
+                        }) : (
+                          <div className="px-2 py-2 text-sm text-muted-foreground">No matching fields</div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <Button size="sm" variant="outline" className="h-8 gap-1" onClick={handleInsertExistingBlank} disabled={!reusedFieldId}>
+                    <Link2 className="h-3 w-3" /> Insert reuse
                   </Button>
                   <Button size="sm" variant="ghost" className="h-8" onClick={() => setShowBlankForm(false)}>
                     <X className="h-3 w-3" />
@@ -1071,36 +1255,46 @@ function SowEditPageInner() {
 
               {/* ── Edit Blank Properties (shown below ribbon when editing a blank) ── */}
               {editingField && (
-                <div className="bg-blue-50/50 dark:bg-blue-950/20 border-b px-4 py-3 flex items-end gap-3 shrink-0">
+                <div className="bg-blue-50/50 dark:bg-blue-950/20 border-b px-4 py-3 flex items-end gap-3 shrink-0" onClick={e => e.stopPropagation()}>
                   <div className="text-xs font-medium text-muted-foreground flex items-center gap-1 mr-2">
                     Editing blank:
                     <span className="blank-chip" data-type={editingField.type} style={{ cursor: "default" }}>
-                      {editingField.label} ({editingField.type})
+                      <span className="blank-chip-icon" aria-hidden="true">
+                        {React.createElement(FIELD_TYPE_META[editingField.type].icon, { className: "h-3 w-3" })}
+                      </span>
+                      {editingField.label}
                     </span>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Label</label>
+                    <Label className="text-[10px] font-medium text-muted-foreground uppercase">Label</Label>
                     <Input value={editingField.label} onChange={e => handleUpdateField(editingField.id, { label: e.target.value })} className="h-8 w-32 text-sm" />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Type</label>
-                    <select value={editingField.type} onChange={e => handleUpdateField(editingField.id, { type: e.target.value as FieldType })}
-                      className="h-8 rounded border border-input bg-background px-2 text-sm">
-                      {FIELD_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
-                    </select>
+                    <Label className="text-[10px] font-medium text-muted-foreground uppercase">Type</Label>
+                    <Select value={editingField.type} onValueChange={value => handleUpdateField(editingField.id, { type: value as FieldType })}>
+                      <SelectTrigger size="sm" className="h-8 w-36 rounded-md bg-background">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {FIELD_TYPES.map(t => <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Placeholder</label>
+                    <Label className="text-[10px] font-medium text-muted-foreground uppercase">Placeholder</Label>
                     <Input value={editingField.placeholder || ""} onChange={e => handleUpdateField(editingField.id, { placeholder: e.target.value })} className="h-8 w-32 text-sm" />
                   </div>
                   <div className="flex flex-col gap-1">
-                    <label className="text-[10px] font-medium text-muted-foreground uppercase">Default</label>
+                    <Label className="text-[10px] font-medium text-muted-foreground uppercase">Default</Label>
                     <Input value={editingField.defaultValue || ""} onChange={e => handleUpdateField(editingField.id, { defaultValue: e.target.value })} className="h-8 w-32 text-sm" />
                   </div>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+                  <Label className="flex items-center gap-1.5 text-xs cursor-pointer pb-2">
                     <input type="checkbox" checked={editingField.required ?? false} onChange={e => handleUpdateField(editingField.id, { required: e.target.checked })} className="rounded" />
                     Required
-                  </label>
+                  </Label>
+                  <Button size="sm" variant="outline" className="h-8 text-red-600 hover:text-red-700" onClick={() => handleDeleteBlank(editingField.id)}>
+                    <Trash2 className="h-3 w-3" /> Delete field everywhere
+                  </Button>
                   <Button size="sm" variant="ghost" className="h-8" onClick={() => setEditingFieldId(null)}>
                     <X className="h-3 w-3" /> Close
                   </Button>
@@ -1115,33 +1309,33 @@ function SowEditPageInner() {
                     <div className="absolute inset-8 border-4 border-black pointer-events-none" />
                     <div className="absolute inset-8 flex items-center justify-center">
                       <div className="text-center w-full px-12">
-                        <SectionContent content="{{field_cover_title}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank} onChange={() => {}} className="text-4xl font-bold" placeholder="SOW Title" />
+                        <SectionContent content="{{field_cover_title}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onChange={() => {}} fieldUsageCounts={fieldUsageCounts} allowBlankRemoval={false} className="text-4xl font-bold" placeholder="SOW Title" />
 
                         <p className="text-3xl font-semibold mt-6 select-none">FOR</p>
                         <div className="mt-4">
-                          <SectionContent content="{{field_cover_client_name}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank} onChange={() => {}} className="text-4xl font-bold" placeholder="Product Name" />
+                          <SectionContent content="{{field_cover_client_name}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onChange={() => {}} fieldUsageCounts={fieldUsageCounts} allowBlankRemoval={false} className="text-4xl font-bold" placeholder="Product Name" />
                         </div>
                             
                         <div className="flex items-baseline justify-center gap-2 mt-10">
                           <span className="text-3xl font-semibold select-none">BUILDING</span>
                           <div className="flex-1 max-w-[200px]">
-                            <SectionContent content="{{field_cover_building}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank} onChange={() => {}} className="text-3xl font-semibold" placeholder="#" />
+                            <SectionContent content="{{field_cover_building}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onChange={() => {}} fieldUsageCounts={fieldUsageCounts} allowBlankRemoval={false} className="text-3xl font-semibold" placeholder="#" />
                           </div>
                         </div>
 
                         <div className="mt-16 space-y-3">
-                          <SectionContent content="{{field_cover_location}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank} onChange={() => {}} className="text-xl" placeholder="Location" />
+                          <SectionContent content="{{field_cover_location}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onChange={() => {}} fieldUsageCounts={fieldUsageCounts} allowBlankRemoval={false} className="text-xl" placeholder="Location" />
                           <p className="text-lg font-semibold mt-10 select-none">Prepared by</p>
-                          <SectionContent content="{{field_cover_prepared_by}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank} onChange={() => {}} className="text-xl" placeholder="Name" />
-                          <SectionContent content="{{field_cover_department}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank} onChange={() => {}} className="text-xl" placeholder="Team / Department" />
-                          <SectionContent content="{{field_cover_date}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank} onChange={() => {}} className="text-xl mt-2" placeholder="Date" />
+                          <SectionContent content="{{field_cover_prepared_by}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onChange={() => {}} fieldUsageCounts={fieldUsageCounts} allowBlankRemoval={false} className="text-xl" placeholder="Name" />
+                          <SectionContent content="{{field_cover_department}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onChange={() => {}} fieldUsageCounts={fieldUsageCounts} allowBlankRemoval={false} className="text-xl" placeholder="Team / Department" />
+                          <SectionContent content="{{field_cover_date}}" fields={data.fields} locked={true} onClickBlank={id => setEditingFieldId(id)} onChange={() => {}} fieldUsageCounts={fieldUsageCounts} allowBlankRemoval={false} className="text-xl mt-2" placeholder="Date" />
                         </div>
                       </div>
                     </div>
                   </div>
 
                   {/* Table of Contents — auto-generated from tocData, not directly editable */}
-                  <DocumentPage hf={data.headerFooter} onHF={updateHF} pageNumber={2} fields={data.fields} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank}>
+                  <DocumentPage hf={data.headerFooter} onHF={updateHF} pageNumber={2} fields={data.fields} fieldUsageCounts={fieldUsageCounts} onClickBlank={id => setEditingFieldId(id)}>
                     <h2 className="font-bold text-lg mb-6 text-center">Table of Contents</h2>
                     <div className="space-y-0.5">
                       {tocData.entries.map((entry, i) => (
@@ -1158,7 +1352,7 @@ function SowEditPageInner() {
                   </DocumentPage>
 
                   {/* Section Content — locked sections shown read-only, unlocked sections editable */}
-                  <DocumentPage hf={data.headerFooter} onHF={updateHF} pageNumber={3} fields={data.fields} onClickBlank={id => setEditingFieldId(id)} onDeleteBlank={handleDeleteBlank}>
+                  <DocumentPage hf={data.headerFooter} onHF={updateHF} pageNumber={3} fields={data.fields} fieldUsageCounts={fieldUsageCounts} onClickBlank={id => setEditingFieldId(id)}>
                     {renderSections(data.sections)}
                     <button onClick={() => setData(p => ({
                       ...p, sections: renumberSections([...p.sections, { id: `sec-${Date.now()}`, number: "", title: "New Section", content: "", lockEdit: true, lockDelete: true, lockAddTable: true, lockAddSections: true, tables: [], children: [] }])
