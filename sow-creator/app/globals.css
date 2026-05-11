@@ -143,28 +143,38 @@
 .blank-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 1px 8px;
-  border-radius: 9999px;
+  gap: 5px;
+  padding: 2px 8px 2px 4px;
+  border-radius: 6px;
   font-size: 0.75rem;
-  font-weight: 500;
-  line-height: 1.4;
+  font-weight: 650;
+  line-height: 1.35;
   cursor: pointer;
   border: 1px solid transparent;
   transition: all 0.15s ease;
   vertical-align: baseline;
+  box-shadow: inset 3px 0 0 rgba(0, 0, 0, 0.16);
+}
+.blank-chip-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.72);
 }
 .blank-chip:hover {
   filter: brightness(0.95);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.1);
 }
 .blank-chip[data-type="text"]      { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
-.blank-chip[data-type="number"]    { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
-.blank-chip[data-type="word"]      { background: #e0e7ff; color: #3730a3; border-color: #a5b4fc; }
-.blank-chip[data-type="sentence"]  { background: #ede9fe; color: #5b21b6; border-color: #c4b5fd; }
-.blank-chip[data-type="paragraph"] { background: #fce7f3; color: #9d174d; border-color: #f9a8d4; }
-.blank-chip[data-type="list"]      { background: #d1fae5; color: #065f46; border-color: #6ee7b7; }
-.blank-chip[data-type="date"]      { background: #ffedd5; color: #9a3412; border-color: #fdba74; }
+.blank-chip[data-type="number"]    { background: #fef3c7; color: #92400e; border-color: #fcd34d; font-variant-numeric: tabular-nums; }
+.blank-chip[data-type="word"]      { background: #e0e7ff; color: #3730a3; border-color: #a5b4fc; border-radius: 9999px; }
+.blank-chip[data-type="sentence"]  { background: #ede9fe; color: #5b21b6; border-color: #c4b5fd; min-width: 8.5rem; }
+.blank-chip[data-type="paragraph"] { background: #fce7f3; color: #9d174d; border-color: #f9a8d4; min-width: 10rem; padding-block: 4px; border-radius: 4px; }
+.blank-chip[data-type="list"]      { background: #d1fae5; color: #065f46; border-color: #6ee7b7; border-style: dashed; }
+.blank-chip[data-type="date"]      { background: #ffedd5; color: #9a3412; border-color: #fdba74; font-family: var(--font-geist-mono), ui-monospace, monospace; }
 
 /* ── Locked Section Indicator ── */
 .locked-overlay {

@@ -120,16 +120,18 @@ export default function NewSOWPage() {
     // the cover page, header, and footer accordingly.
     const setupData = {
       documentName: documentName.trim(),
-      title,
-      projectNumber,
-      clientName,
-      building,
-      location,
-      preparedBy,
-      department,
-      date,
-      description,
-      confidentiality,
+      fieldValues: {
+        field_cover_title: title,
+        field_project_number: projectNumber,
+        field_cover_client_name: clientName,
+        field_cover_building: building,
+        field_cover_location: location,
+        field_cover_prepared_by: preparedBy,
+        field_cover_department: department,
+        field_cover_date: date,
+        field_cover_description: description,
+        field_cover_confidentiality: confidentiality,
+      }
     };
 
     const encoded = btoa(JSON.stringify(setupData));

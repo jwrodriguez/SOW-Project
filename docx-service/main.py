@@ -63,18 +63,6 @@ class SectionNode(BaseModel):
 # Required for self-referential Pydantic model (children: list[SectionNode])
 SectionNode.model_rebuild()
 
-class CoverPageData(BaseModel):
-    title: str
-    projectNumber: str
-    clientName: str
-    building: str
-    location: str
-    preparedBy: str
-    department: str
-    date: str
-    version: str
-    confidentiality: str
-
 class HeaderFooterData(BaseModel):
     headerLeft: str
     headerCenter: str
@@ -96,7 +84,6 @@ class TemplateField(BaseModel):
 class TemplateData(BaseModel):
     documentName: str
     fields: list[TemplateField]
-    coverPage: CoverPageData
     headerFooter: HeaderFooterData
     sections: list[SectionNode]
 
@@ -197,11 +184,20 @@ async def generate_docx(template: TemplateData):
         }
 
         # ── Cover page ────────────────────────────────────────────────────────
-        cover = template.coverPage
+        title_val = field_map.get("field_cover_title", "STATEMENT OF WORK")
+        client_val = field_map.get("field_cover_client_name", "—")
+        bldg_val = field_map.get("field_cover_building", "")
+        loc_val = field_map.get("field_cover_location", "—")
+        prepared_val = field_map.get("field_cover_prepared_by", "—")
+        dept_val = field_map.get("field_cover_department", "—")
+        date_val = field_map.get("field_cover_date", "—")
+        version_val = field_map.get("field_cover_version", "1.0")
+        proj_num_val = field_map.get("field_project_number", "—")
+        conf_val = field_map.get("field_cover_confidentiality", "Confidential")
 
         title_para = doc.add_paragraph()
         title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        title_run = title_para.add_run(cover.title.upper())
+        title_run = title_para.add_run(title_val.upper())
         title_run.bold = True
         title_run.font.size = Pt(24)
 
@@ -215,14 +211,14 @@ async def generate_docx(template: TemplateData):
 
         client_para = doc.add_paragraph()
         client_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        client_run = client_para.add_run(cover.clientName.upper() if cover.clientName else "—")
+        client_run = client_para.add_run(client_val.upper() if client_val != "—" else "—")
         client_run.bold = True
         client_run.font.size = Pt(18)
 
-        if cover.building:
+        if bldg_val and bldg_val != "—" and bldg_val != "[Building]":
             bldg_para = doc.add_paragraph()
             bldg_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-            bldg_run = bldg_para.add_run(f"BUILDING {cover.building}")
+            bldg_run = bldg_para.add_run(f"BUILDING {bldg_val}")
             bldg_run.bold = True
             bldg_run.font.size = Pt(14)
 
@@ -230,16 +226,16 @@ async def generate_docx(template: TemplateData):
         doc.add_paragraph()
 
         details = [
-            cover.location,
+            loc_val,
             "",
             "Prepared by",
-            cover.preparedBy,
-            cover.department,
+            prepared_val,
+            dept_val,
             "",
-            f"Date: {cover.date}",
-            f"Version: {cover.version}",
-            f"Project Number: {cover.projectNumber}",
-            f"Classification: {cover.confidentiality}",
+            f"Date: {date_val}",
+            f"Version: {version_val}",
+            f"Project Number: {proj_num_val}",
+            f"Classification: {conf_val}",
         ]
         for line in details:
             p = doc.add_paragraph(line)
@@ -413,15 +409,15 @@ async def generate_docx(template: TemplateData):
 
         add_hf_paragraph(
             main_section.header,
-            hf.headerLeft.split("\n")[0] if hf.headerLeft else "",
-            hf.headerCenter,
-            hf.headerRight,
+            resolve_tokens(hf.headerLeft.split("\n")[0] if hf.headerLeft else "", field_map),
+            resolve_tokens(hf.headerCenter, field_map),
+            resolve_tokens(hf.headerRight, field_map),
         )
         add_hf_paragraph(
             main_section.footer,
-            hf.footerLeft,
-            hf.footerCenter,
-            hf.footerRight,
+            resolve_tokens(hf.footerLeft, field_map),
+            resolve_tokens(hf.footerCenter, field_map),
+            resolve_tokens(hf.footerRight, field_map),
         )
 
         # ── Serialize and return ──────────────────────────────────────────────
