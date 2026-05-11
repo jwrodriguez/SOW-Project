@@ -64,7 +64,7 @@ const FIELD_TYPES: { value: FieldType; label: string }[] = [
   { value: "text", label: "Text" }, { value: "number", label: "Number" },
   { value: "word", label: "Word" }, { value: "sentence", label: "Sentence" },
   { value: "paragraph", label: "Paragraph" }, { value: "list", label: "List" },
-  { value: "date", label: "Date" },
+  { value: "date", label: "Date" }, { value: "dropdown", label: "Dropdown" },
 ];
 
 const FIELD_TYPE_META: Record<FieldType, { icon: LucideIcon; shortLabel: string }> = {
@@ -793,12 +793,19 @@ function SowEditPageInner() {
   const [blankType, setBlankType] = useState<FieldType>("text");
   const [blankPlaceholder, setBlankPlaceholder] = useState("");
   const [blankRequired, setBlankRequired] = useState(false);
+  // Comma-separated option values used when blankType === "dropdown"
+  const [blankOptions, setBlankOptions] = useState("");
   const [reusedFieldId, setReusedFieldId] = useState("");
   const [reuseSearch, setReuseSearch] = useState("");
   const [showReuseOptions, setShowReuseOptions] = useState(false);
 
   // Blank editing state
   const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
+  // Raw comma-separated string for the options input in the edit panel.
+  // Kept separate from field.options so the user can type freely (including
+  // commas) without every keystroke splitting and rejoining the array.
+  // Committed to field.options only on blur.
+  const [rawOptionsText, setRawOptionsText] = useState("");
 
   const selectedSection = selectedSectionId ? findSection(data.sections, selectedSectionId) : null;
   const reusableFields = useMemo(() => {
@@ -871,9 +878,14 @@ function SowEditPageInner() {
   function handleInsertBlank() {
     if (!blankLabel.trim() || !selectedSectionId) return;
     const fieldId = `field_${blankLabel.trim().toLowerCase().replace(/\s+/g, "_")}_${Date.now()}`;
+    // Parse comma-separated options string into a trimmed array for dropdown type
+    const parsedOptions = blankType === "dropdown"
+      ? blankOptions.split(",").map(o => o.trim()).filter(Boolean)
+      : undefined;
     const newField: TemplateField = {
       id: fieldId, label: blankLabel.trim(), type: blankType,
       placeholder: blankPlaceholder || undefined, required: blankRequired,
+      ...(parsedOptions && parsedOptions.length > 0 ? { options: parsedOptions } : {}),
     };
     setData(p => {
       const sec = findSection(p.sections, selectedSectionId);
@@ -884,7 +896,7 @@ function SowEditPageInner() {
         sections: updateSection(p.sections, selectedSectionId, { content: newContent }),
       };
     });
-    setBlankLabel(""); setBlankPlaceholder(""); setBlankRequired(false);
+    setBlankLabel(""); setBlankPlaceholder(""); setBlankRequired(false); setBlankOptions("");
     setShowBlankForm(false);
   }
 
@@ -1024,6 +1036,13 @@ function SowEditPageInner() {
   const tocData = generateTOCEntries(data.sections);
   const editingField = editingFieldId ? data.fields.find(f => f.id === editingFieldId) : null;
   const fieldUsageCounts = useMemo(() => countFieldOccurrences(data), [data]);
+
+  // When the user opens a different blank to edit, seed the raw options text
+  // from that field's current options array so they see the existing values.
+  // This also resets it when they close the panel (editingFieldId = null).
+  useEffect(() => {
+    setRawOptionsText(editingField?.options?.join(", ") ?? "");
+  }, [editingFieldId]); // intentionally only on id change, not every field update
 
   const handleReturnToNewForm = () => {
     router.push("/login");
@@ -1177,6 +1196,20 @@ function SowEditPageInner() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {/* Options field — only visible when type is dropdown */}
+                  {blankType === "dropdown" && (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase">
+                        Options <span className="normal-case text-[9px]">(comma-separated)</span>
+                      </label>
+                      <Input
+                        value={blankOptions}
+                        onChange={e => setBlankOptions(e.target.value)}
+                        placeholder="Option A, Option B, Option C"
+                        className="h-8 w-56 text-sm"
+                      />
+                    </div>
+                  )}
                   <div className="flex flex-col gap-1">
                     <Label className="text-[10px] font-medium text-muted-foreground uppercase">Placeholder</Label>
                     <Input value={blankPlaceholder} onChange={e => setBlankPlaceholder(e.target.value)} placeholder="Hint text..." className="h-8 w-32 text-sm" />
@@ -1247,7 +1280,7 @@ function SowEditPageInner() {
                   <Button size="sm" variant="outline" className="h-8 gap-1" onClick={handleInsertExistingBlank} disabled={!reusedFieldId}>
                     <Link2 className="h-3 w-3" /> Insert reuse
                   </Button>
-                  <Button size="sm" variant="ghost" className="h-8" onClick={() => setShowBlankForm(false)}>
+                  <Button size="sm" variant="ghost" className="h-8" onClick={() => { setShowBlankForm(false); setBlankOptions(""); }}>
                     <X className="h-3 w-3" />
                   </Button>
                 </div>
@@ -1280,6 +1313,25 @@ function SowEditPageInner() {
                       </SelectContent>
                     </Select>
                   </div>
+                  {/* Options editor — only shown when the field type is dropdown */}
+                  {editingField.type === "dropdown" && (
+                    <div className="flex flex-col gap-1">
+                      <label className="text-[10px] font-medium text-muted-foreground uppercase">
+                        Options <span className="normal-case text-[9px]">(comma-separated)</span>
+                      </label>
+                      <Input
+                        value={rawOptionsText}
+                        onChange={e => setRawOptionsText(e.target.value)}
+                        onBlur={() =>
+                          handleUpdateField(editingField.id, {
+                            options: rawOptionsText.split(",").map(o => o.trim()).filter(Boolean),
+                          })
+                        }
+                        placeholder="Option A, Option B, Option C"
+                        className="h-8 w-56 text-sm"
+                      />
+                    </div>
+                  )}
                   <div className="flex flex-col gap-1">
                     <Label className="text-[10px] font-medium text-muted-foreground uppercase">Placeholder</Label>
                     <Input value={editingField.placeholder || ""} onChange={e => handleUpdateField(editingField.id, { placeholder: e.target.value })} className="h-8 w-32 text-sm" />

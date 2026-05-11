@@ -11,7 +11,7 @@
  * Used by admins when inserting blanks into locked sections.
  * Engineers see these rendered as colored chips they can click to fill in.
  */
-export type FieldType = "text" | "number" | "word" | "sentence" | "paragraph" | "list" | "date";
+export type FieldType = "text" | "number" | "word" | "sentence" | "paragraph" | "list" | "date" | "dropdown";
 
 /**
  * Describes one fillable blank that an admin inserts into a section. Stored in
@@ -32,6 +32,7 @@ export type TemplateField = {
   defaultValue?: string;
   placeholder?: string;
   required?: boolean;
+  options?: string[];
 };
 
 /**
@@ -59,6 +60,8 @@ export type SectionNode = {
   lockAddSections: boolean;
   tables?: TableData[];
   children: SectionNode[];
+  deleted?: boolean;
+  engineerCreated?: boolean;
 };
 
 /**
