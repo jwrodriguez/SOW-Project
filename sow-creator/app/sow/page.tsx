@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Grid2X2Plus, SquarePlus, Trash2, Type, Save, Download, FileText, ChevronRight, ChevronDown, Lock, ChevronLeft, CheckCircle2, Circle, FileDown, Plane } from "lucide-react";
 import type { TemplateData, SectionNode, TemplateField, HeaderFooterData } from "@/types/pageTypes";
 import { getGlobalTemplate } from "@/lib/db-pullTemp";
+import {values} from "eslint-config-next";
 
 // ─── Default blank template ───────────────────────────────────────────────────
 // Used when no draft or template is passed via URL. Engineers should normally
@@ -862,7 +863,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, activeField
       )}
       {children}
       {hoveredSectionId === section.id && (
-        <div className="absolute top-0 right-0 bg-white border border-gray-300 rounded shadow-lg p-2 z-10">
+        <div>
           {showDeleteConfirm ? (
             <div className="flex flex-col gap-2">
               <span className="text-sm">Do you need the "{section.title}" section?</span>
@@ -872,11 +873,19 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, activeField
               </div>
             </div>
           ) : (
-            <div className="flex flex-col gap-1">
-              {!section.lockAddSections && <Button size="sm" onClick={() => onAddSection(section.id)}>Add Subsection</Button>}
-              {!section.lockAddTable && <Button size="sm" onClick={() => setShowTableForm(true)}>Add Table</Button>}
-              {/* {!section.lockDelete && <Button size="sm" variant="destructive" onClick={() => setShowDeleteConfirm(true)}>Delete Section</Button>} */}
-            </div>
+              <div className="flex flex-col gap align-middle absolute top-0 right-0 shadow-lg">
+                {!section.lockAddSections && (
+                    <div className="bg-white border border-gray-300 rounded-t p-2 z-10">
+                      <Button className="w-full" size="sm" onClick={() => onAddSection(section.id)}>Add Subsection</Button>
+                    </div>
+                )}
+                {!section.lockAddTable && (
+                    <div className="bg-white border border-gray-300 rounded-b p-2 z-10 w-full">
+                      <Button className="w-full" size="sm" onClick={() => setShowTableForm(true)}>Add Table</Button>
+                    </div>
+                )}
+                {/* {!section.lockDelete && <Button size="sm" variant="destructive" onClick={() => setShowDeleteConfirm(true)}>Delete Section</Button>} */}
+              </div>
           )}
         </div>
       )}
@@ -978,17 +987,42 @@ function collectDeletedSections(sections: SectionNode[]): SectionNode[] {
 // ─── Main inner component ─────────────────────────────────────────────────────
 function SowEngineerPageInner() {
   const searchParams = useSearchParams();
+  const inputs = searchParams.get("draft");
 
   // Load template from ?draft= URL param (base64 encoded TemplateData).
   // Falls back to default blank template. When DB is live this should
   // load from a template ID in the URL instead.
   const initialData: TemplateData = useMemo(() => {
+    if (inputs){
+      // Pull Form Information from String
+      const information = JSON.parse(atob(inputs));
+
+
+      // Prepare Inputs to Document
+      // Map Inputs from Initial Form to Fields in the Template for the User
+      DEFAULT_TEMPLATE.documentName = information.documentName;
+      DEFAULT_TEMPLATE.fields = DEFAULT_TEMPLATE.fields.map(field => {
+        const value = information.fieldValues[field.id];
+
+        const v = Array.isArray(value) ? value[0] : value;
+
+        return {
+          ...field,
+          defaultValue: v ?? " "
+        }
+      })
+
+      return DEFAULT_TEMPLATE;
+    }
+
+
     return DEFAULT_TEMPLATE;
-    
+
   }, []);
 
   // Template structure - engineers cannot change this, only their content edits and field values
   const [data, setData] = useState<TemplateData>(initialData);// Navigator expand/collapse state
+  console.log(data)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
     new Set(initialData.sections.map(s => s.id))
   );
@@ -1005,7 +1039,7 @@ function SowEngineerPageInner() {
         // Only update if we actually got a valid object back
         if (dbData) {
           // If the DB data still has an old coverPage, we need to migrate it to fields
-          let migratedDbData = { ...(dbData as TemplateData) };
+          const migratedDbData = { ...(dbData as TemplateData) };
           if (migratedDbData.coverPage) {
             // Add default cover fields if they don't exist
             const coverFields: TemplateField[] = [
@@ -1034,7 +1068,7 @@ function SowEngineerPageInner() {
             setData((prevData) => {
               const updatedData = { ...prevData };
               updatedData.documentName = parsedData.documentName;
-              
+
               if (parsedData.fieldValues) {
                 // We map these over to the default values of fields directly
                 updatedData.fields = updatedData.fields.map(f => {
@@ -1129,25 +1163,6 @@ function SowEngineerPageInner() {
     setExpandedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
   }
 
-  // Saves a draft by merging field values back into the template fields
-  // and downloading the result as a JSON file the engineer can reload later.
-  function handleSave() {
-    const merged: TemplateData = {
-      ...data,
-      fields: data.fields.map(f => ({
-        ...f,
-        defaultValue: fieldValues[f.id] ?? f.defaultValue,
-      })),
-    };
-    const blob = new Blob([JSON.stringify(merged, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}-draft-${new Date().toISOString().split("T")[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-
   // Exports the completed SOW as a Word document via the FastAPI docx service.
   const [exporting, setExporting] = useState(false);
 
@@ -1183,32 +1198,6 @@ function SowEngineerPageInner() {
     } finally {
       setExporting(false);
     }
-  }
-
-  // Loads a previously saved draft JSON file
-  function handleLoad() {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
-    input.onchange = (e: Event) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ev => {
-        try {
-          const loaded = JSON.parse(ev.target?.result as string) as TemplateData;
-          setData(loaded);
-          const values: Record<string, string> = {};
-          loaded.fields.forEach(f => { if (f.defaultValue) values[f.id] = f.defaultValue; });
-          setFieldValues(values);
-          setExpandedIds(new Set(loaded.sections.map(s => s.id)));
-        } catch {
-          alert("Invalid draft file.");
-        }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
   }
 
   // Updates an unlocked section's content text
@@ -1438,12 +1427,6 @@ function SowEngineerPageInner() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleLoad}>
-            <Download className="h-4 w-4 mr-1" /> Load Draft
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleSave}>
-            <Save className="h-4 w-4 mr-1" /> Save Draft
-          </Button>
           <Button size="sm" onClick={handleExport} disabled={exporting}>
             <FileDown className="h-4 w-4 mr-1" />
             {exporting ? "Exporting..." : "Export Word"}

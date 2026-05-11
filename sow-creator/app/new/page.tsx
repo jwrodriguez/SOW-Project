@@ -9,8 +9,7 @@ import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   SidebarInset,
-  SidebarProvider,
-  SidebarTrigger,
+  SidebarProvider
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -98,7 +97,7 @@ export default function NewSOWPage() {
 
   // All fields that the edit page reads from the setup param
   const [documentName, setDocumentName] = useState("");
-  const [title, setTitle] = useState("Statement of Work (SOW)");
+  const title = useState("Statement of Work (SOW)");
   const [projectNumber, setProjectNumber] = useState(generateProjectNumber);
   const [clientName, setClientName] = useState("");
   const [building, setBuilding] = useState("");
@@ -111,7 +110,7 @@ export default function NewSOWPage() {
 
   const canSubmit = documentName.trim().length > 0;
 
-  function handleSubmit(e: React.FormEvent) {
+  function handleSubmit(e: React.SubmitEvent) {
     e.preventDefault();
     if (!canSubmit) return;
 
@@ -142,7 +141,7 @@ export default function NewSOWPage() {
   const step: 1 | 2 | 3 = preparedBy || department || date !== today ? 3 : clientName || building || location ? 2 : 1;
 
 
-  const { data: sessionData, isPending } = useSession();
+  const { data: sessionData } = useSession();
   const user = sessionData?.user
   ? {
       name: sessionData.user.name ?? "User",
@@ -182,11 +181,13 @@ export default function NewSOWPage() {
           <div className="flex-1" />
 
           <div className="flex items-center gap-2">
-            <span> 
-              <button onClick={handleEditForm} className="hover:underline text-sm">
-                Edit Form
-              </button> 
-            </span>
+            {sessionData?.user.role === 'ADMIN' && (
+                <span>
+                  <button onClick={handleEditForm} className="hover:underline text-sm">
+                    Edit Form
+                  </button>
+                </span>
+            )}
             <span> {user ? <NavUser user={user} /> : null} </span>
           </div>
         </header>
@@ -461,7 +462,7 @@ export default function NewSOWPage() {
                 <Button
                   type="submit"
                   disabled={!canSubmit}
-                  className="gap-2 min-w-[160px]"
+                  className="gap-2 min-w-40"
                 >
                   Continue to Editor
                   <ArrowRight className="h-4 w-4" />
