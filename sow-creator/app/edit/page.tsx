@@ -413,50 +413,53 @@ export function SortableSectionBlock({ section, depth, isOnlyTop, isSelected, fi
     <div ref={setNodeRef} style={style} id={section.id}
       className={`relative ${section.lockEdit ? "locked-overlay" : ""} ${isSelected ? "ring-2 ring-primary/30 rounded" : ""}`}
       onClick={e => { e.stopPropagation(); onSelect(); }}
-      onMouseEnter={() => setHovered(true)} onMouseLeave={() => { setHovered(false); setShowTableForm(false); }}>
-
-      {/* Hover toolbar */}
-      {hovered && (
-        <div className="absolute -top-1 right-0 flex gap-1 bg-white border border-gray-200 rounded shadow-md px-1.5 py-1 z-20 text-xs whitespace-nowrap">
-          {/* Drag handle */}
-          <button {...attributes} {...listeners} className="drag-handle px-1 py-0.5 rounded flex items-center" title="Drag to reorder">
-            <GripVertical className="h-3 w-3" />
-          </button>
-          <button onClick={onToggleLock} title={section.lockEdit ? "Unlock section" : "Lock section"}
-            className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
-            {section.lockEdit ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
-          </button>
-          <button onClick={onAddChild} title="Add subsection" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
-            <Plus className="h-3 w-3" /> Sub
-          </button>
-          <button onClick={onAddSibling} title="Add section at same level" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
-            <Plus className="h-3 w-3" /> Section
-          </button>
-          <button onClick={() => setShowTableForm(t => !t)} title="Add table" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
-            <TableIcon className="h-3 w-3" /> Table
-          </button>
-          <button onClick={onDelete} disabled={isOnlyTop} title="Delete section"
-            className="hover:bg-red-50 px-1.5 py-0.5 rounded flex items-center gap-1 text-red-500 disabled:opacity-30">
-            <Trash2 className="h-3 w-3" />
-          </button>
-        </div>
-      )}
-
-      {/* Table size picker */}
-      {showTableForm && (
-        <div className="flex items-center gap-2 mb-2 p-2 bg-gray-50 border border-gray-200 rounded text-xs">
-          <span className="text-gray-600">Rows (1-20):</span>
-          <input type="number" min={1} max={20} value={tr} onChange={e => setTr(Number(e.target.value) || 3)} className="w-12 border rounded px-1 py-0.5" />
-          <span className="text-gray-600">× Cols (1-10):</span>
-          <input type="number" min={1} max={10} value={tc} onChange={e => setTc(Number(e.target.value) || 3)} className="w-12 border rounded px-1 py-0.5" />
-          <button onClick={() => { onAddTable(tr, tc); setShowTableForm(false); }}
-            className="bg-primary text-primary-foreground px-2 py-0.5 rounded hover:opacity-90">Add</button>
-          <button onClick={() => setShowTableForm(false)} className="px-2 py-0.5 rounded hover:bg-gray-200 text-gray-600">Cancel</button>
-        </div>
-      )}
+      >
 
       {/* Section heading */}
-      <div className="flex items-baseline gap-2 mb-1" style={{ marginLeft: `${depth * 16}px` }}>
+      <div className="flex items-baseline gap-2 mb-1" style={{ marginLeft: `${depth * 16}px` }}
+           onMouseEnter={() => setHovered(true)} onMouseLeave={() => { setHovered(false); setShowTableForm(false); }}
+      >
+
+        {/* Hover toolbar */}
+        {hovered && (
+            <div className="absolute -top-1 right-0 flex gap-1 bg-white border border-gray-200 rounded shadow-md px-1.5 py-1 z-20 text-xs whitespace-nowrap">
+              {/* Drag handle */}
+              <button {...attributes} {...listeners} className="drag-handle px-1 py-0.5 rounded flex items-center" title="Drag to reorder">
+                <GripVertical className="h-3 w-3" />
+              </button>
+              <button onClick={onToggleLock} title={section.lockEdit ? "Unlock section" : "Lock section"}
+                      className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
+                {section.lockEdit ? <Lock className="h-3 w-3" /> : <Unlock className="h-3 w-3" />}
+              </button>
+              <button onClick={onAddChild} title="Add subsection" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
+                <Plus className="h-3 w-3" /> Sub
+              </button>
+              <button onClick={onAddSibling} title="Add section at same level" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
+                <Plus className="h-3 w-3" /> Section
+              </button>
+              <button onClick={() => setShowTableForm(t => !t)} title="Add table" className="hover:bg-gray-100 px-1.5 py-0.5 rounded flex items-center gap-1 text-gray-700">
+                <TableIcon className="h-3 w-3" /> Table
+              </button>
+              <button onClick={onDelete} disabled={isOnlyTop} title="Delete section"
+                      className="hover:bg-red-50 px-1.5 py-0.5 rounded flex items-center gap-1 text-red-500 disabled:opacity-30">
+                <Trash2 className="h-3 w-3" />
+              </button>
+            </div>
+        )}
+
+        {/* Table size picker */}
+        {showTableForm && (
+            <div className="flex items-center gap-2 mb-2 p-2 bg-gray-50 border border-gray-200 rounded text-xs">
+              <span className="text-gray-600">Rows (1-20):</span>
+              <input type="number" min={1} max={20} value={tr} onChange={e => setTr(Number(e.target.value) || 3)} className="w-12 border rounded px-1 py-0.5" />
+              <span className="text-gray-600">× Cols (1-10):</span>
+              <input type="number" min={1} max={10} value={tc} onChange={e => setTc(Number(e.target.value) || 3)} className="w-12 border rounded px-1 py-0.5" />
+              <button onClick={() => { onAddTable(tr, tc); setShowTableForm(false); }}
+                      className="bg-primary text-primary-foreground px-2 py-0.5 rounded hover:opacity-90">Add</button>
+              <button onClick={() => setShowTableForm(false)} className="px-2 py-0.5 rounded hover:bg-gray-200 text-gray-600">Cancel</button>
+            </div>
+        )}
+
         {(section.lockEdit && section.lockDelete && section.lockAddSections && section.lockAddTable) && <Lock className="h-3 w-3 text-slate-400 shrink-0 mt-1" />}
         {!(section.lockEdit && section.lockDelete && section.lockAddSections && section.lockAddTable) && (section.lockEdit || section.lockDelete || section.lockAddSections || section.lockAddTable) && (
           <div className="inline-grid grid-cols-2 gap-0.5 shrink-0">
@@ -751,7 +754,7 @@ function SowEditPageInner() {
       try {
         const dbData = await getGlobalTemplate();
         if (dbData){
-          let migratedDbData = { ...(dbData as TemplateData) };
+          const migratedDbData = { ...(dbData as TemplateData) };
           if (migratedDbData.coverPage) {
             // Add default cover fields if they don't exist
             const coverFields: TemplateField[] = [
