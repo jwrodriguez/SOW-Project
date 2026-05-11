@@ -1003,13 +1003,15 @@ function SowEngineerPageInner() {
       DEFAULT_TEMPLATE.documentName = information.documentName;
       DEFAULT_TEMPLATE.fields = DEFAULT_TEMPLATE.fields.map(field => {
         const value = information.fieldValues[field.id];
+        if (value){
+          const v = Array.isArray(value) ? value[0] : value;
 
-        const v = Array.isArray(value) ? value[0] : value;
-
-        return {
-          ...field,
-          defaultValue: v ?? " "
+          return {
+            ...field,
+            defaultValue: v ?? " "
+          }
         }
+        return {...field}
       })
 
       return DEFAULT_TEMPLATE;
