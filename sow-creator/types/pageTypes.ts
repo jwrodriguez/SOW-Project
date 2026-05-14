@@ -11,7 +11,7 @@
  * Used by admins when inserting blanks into locked sections.
  * Engineers see these rendered as colored chips they can click to fill in.
  */
-export type FieldType = "text" | "number" | "word" | "sentence" | "paragraph" | "list" | "date";
+export type FieldType = "text" | "number" | "word" | "sentence" | "paragraph" | "list" | "date" | "dropdown";
 
 /**
  * Describes one fillable blank that an admin inserts into a section. Stored in
@@ -32,6 +32,7 @@ export type TemplateField = {
   defaultValue?: string;
   placeholder?: string;
   required?: boolean;
+  options?: string[];
 };
 
 /**
@@ -59,6 +60,8 @@ export type SectionNode = {
   lockAddSections: boolean;
   tables?: TableData[];
   children: SectionNode[];
+  deleted?: boolean;
+  engineerCreated?: boolean;
 };
 
 /**
@@ -76,32 +79,6 @@ export type TableData = {
   data: string[][];
 };
 
-/**
- * All the fields that appear on the document cover page.
- *
- * - `title`: Title of the SOW
- * - `projectNumber`: SOW Project Identification Number
- * - `clientName`: Vendor receiving the Statement of Work
- * - `building`: Building number
- * - `location`: City, state, or base location
- * - `preparedBy`: Document author
- * - `department`: Department or branch issuing the Statement of Work
- * - `date`: Statement of Work publishing date
- * - `version`: Historical identifier of the Statement of Work
- * - `confidentiality`: Level of confidentiality
- */
-export type CoverPageData = {
-  title: string;
-  projectNumber: string;
-  clientName: string;
-  building: string;
-  location: string;
-  preparedBy: string;
-  department: string;
-  date: string;
-  version: string;
-  confidentiality: string;
-};
 
 /**
  * Controls what appears in the header and footer on document pages. Each zone
@@ -143,7 +120,7 @@ export type HeaderFooterData = {
 export type TemplateData = {
   documentName: string;
   fields: TemplateField[];
-  coverPage: CoverPageData;
+  coverPage?: any; // Marked optional for migration purposes
   headerFooter: HeaderFooterData;
   sections: SectionNode[];
 };

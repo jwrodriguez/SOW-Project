@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
 
     // Basic presence check - the Python service does full Pydantic validation
     // but we catch obviously missing fields early to return a clear error.
-    if (!body.documentName || !body.sections || !body.coverPage) {
+    if (!body.documentName || !body.sections || !body.headerFooter) {
       return NextResponse.json(
         { error: "Invalid template data - missing required fields." },
         { status: 400 }

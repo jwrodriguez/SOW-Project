@@ -17,6 +17,7 @@ import { Button } from "@/components/ui/button";
 import { Grid2X2Plus, SquarePlus, Trash2, Type, Save, Download, FileText, ChevronRight, ChevronDown, Lock, ChevronLeft, CheckCircle2, Circle, FileDown, Plane } from "lucide-react";
 import type { TemplateData, SectionNode, TemplateField, HeaderFooterData } from "@/types/pageTypes";
 import { getGlobalTemplate } from "@/lib/db-pullTemp";
+import {values} from "eslint-config-next";
 
 // ─── Default blank template ───────────────────────────────────────────────────
 // Used when no draft or template is passed via URL. Engineers should normally
@@ -51,24 +52,22 @@ const DEFAULT_TEMPLATE: TemplateData = {
     { id: "field_prohibited_mats_009",     label: "Prohibited Materials",            type: "paragraph", placeholder: "List any prohibited materials...",  required: false },
     { id: "field_written_submittals_010",  label: "Written Submittals",              type: "paragraph", placeholder: "Describe required documentation...",required: false },
     { id: "field_gfp_details_011",         label: "Government Furnished Property",   type: "paragraph", placeholder: "List any GFP items provided...",    required: false },
+    { id: "field_cover_title", label: "SOW Title", type: "text", defaultValue: "Statement of Work", required: true },
+    { id: "field_project_number", label: "Project Number", type: "text", defaultValue: "SOW-2026-001", required: true },
+    { id: "field_cover_client_name", label: "Client Name", type: "text", required: false },
+    { id: "field_cover_building", label: "Building", type: "text", required: false },
+    { id: "field_cover_location", label: "Location", type: "text", required: false },
+    { id: "field_cover_prepared_by", label: "Prepared By", type: "text", required: false },
+    { id: "field_cover_department", label: "Department", type: "text", required: false },
+    { id: "field_cover_date", label: "Date", type: "date", required: false },
+    { id: "field_cover_confidentiality", label: "Confidentiality", type: "text", defaultValue: "Confidential", required: false },
+    { id: "field_cover_description", label: "Description", type: "paragraph", required: false },
   ],
-  coverPage: {
-    title: "Statement of Work",
-    projectNumber: "SOW-2026-001",
-    clientName: "",
-    building: "",
-    location: "",
-    preparedBy: "",
-    department: "",
-    date: new Date().toISOString().split("T")[0],
-    version: "1.0",
-    confidentiality: "Confidential",
-  },
   headerFooter: {
     headerLeft: "Statement of Work",
     headerCenter: "",
     headerRight: "",
-    footerLeft: "SOW-2026-001",
+    footerLeft: "{{field_project_number}}",
     footerCenter: "",
     footerRight: "Page {PAGE}",
     showPageNumbers: true,
@@ -134,9 +133,13 @@ function buildQuestionList(sections: SectionNode[], fields: TemplateField[]): Qu
 
   function walk(nodes: SectionNode[]) {
     for (const section of nodes) {
+      // Soft-deleted sections are invisible to the engineer — skip entirely
+      if (section.deleted) continue;
       // Add unlocked sections (where engineer edits freely) as a
-      // "do you need this section?" question before their field blanks
-      if (!section.lockDelete) {
+      // "do you need this section?" question ONLY when the admin designed
+      // them as optional. Engineer-created sections (engineerCreated: true)
+      // are always intentional additions — never ask to remove them.
+      if (!section.lockDelete && !section.engineerCreated) {
         const seenKey = `__section__${section.id}`;
         if (!seen.has(seenKey)) {
           seen.add(seenKey);
@@ -180,17 +183,20 @@ function buildQuestionList(sections: SectionNode[], fields: TemplateField[]): Qu
 // Dot indicators show answered/skipped/current status for every question at a glance.
 // The input here calls onChangeField - same handler as the inline BlankInputs -
 // so the document preview updates live as the engineer types.
-function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, onChangeIndex, onDeleteSection }: {
+function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, onChangeIndex, onDeleteSection, deletedSections, onRestoreSection }: {
   questions: QuestionItem[];
   activeIndex: number;
   fieldValues: Record<string, string>;
   onChangeField: (fieldId: string, value: string) => void;
   onChangeIndex: (index: number) => void;
   onDeleteSection: (sectionId: string) => void;
+  deletedSections: SectionNode[];
+  onRestoreSection: (sectionId: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null);
-  // When true, shows the "Do you need this section?" confirmation prompt
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  // Controls the "Removed sections" restore dropdown inside the ribbon
+  const [showRestoreDropdown, setShowRestoreDropdown] = useState(false);
 
   // Focus the input whenever the active question changes
   useEffect(() => {
@@ -271,7 +277,7 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
                     const key = q.isUnlockedSection ? `__section__${q.sectionId}` : q.field!.id;
                     return (
                       <option key={key} value={i}>
-                        {q.isUnlockedSection ? "?" : v !== "" ? "✓" : "○"} {label}
+                        {q.isUnlockedSection ? "?" : v !== "" ? "✓" : "○"} {q.sectionNumber} · {label}
                       </option>
                     );
                   })}
@@ -289,8 +295,54 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
           </span>
         </div>
 
-        {/* Progress summary - single consolidated indicator */}
-        <div className="flex items-center gap-2">
+        {/* Progress summary + restore dropdown — grouped on the right */}
+        <div className="flex items-center gap-3">
+          {/* Restore removed sections dropdown — only shown when sections have been removed */}
+          {deletedSections.length > 0 && (
+            <div className="relative">
+              <button
+                onClick={() => setShowRestoreDropdown(p => !p)}
+                className="flex items-center gap-1.5 text-xs font-medium text-amber-700 bg-amber-100 hover:bg-amber-200 border border-amber-300 rounded-full px-2.5 py-1 transition-colors"
+                title="Restore a removed section"
+              >
+                <span className="inline-flex items-center justify-center w-3.5 h-3.5 rounded-full bg-amber-500 text-white text-[9px] font-bold leading-none">
+                  {deletedSections.length}
+                </span>
+                Removed
+                {showRestoreDropdown ? <ChevronDown className="h-3 w-3" /> : <ChevronRight className="h-3 w-3" />}
+              </button>
+
+              {/* Dropdown panel — floats below the button */}
+              {showRestoreDropdown && (
+                <div className="absolute right-0 top-full mt-1.5 z-50 bg-background border border-amber-200 rounded-lg shadow-lg min-w-[220px] overflow-hidden">
+                  <div className="px-3 py-2 border-b border-amber-100 bg-amber-50">
+                    <span className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider">Removed sections</span>
+                  </div>
+                  <div className="max-h-52 overflow-y-auto">
+                    {deletedSections.map(s => (
+                      <div key={s.id} className="flex items-center justify-between gap-2 px-3 py-2 hover:bg-amber-50 transition-colors">
+                        <span className="flex items-center gap-2 min-w-0 flex-1">
+                          <span className="font-mono text-[10px] text-amber-500 shrink-0">{s.number}</span>
+                          <span className="text-xs text-foreground truncate">{s.title}</span>
+                        </span>
+                        <button
+                          onClick={() => {
+                            onRestoreSection(s.id);
+                            if (deletedSections.length === 1) setShowRestoreDropdown(false);
+                          }}
+                          className="text-[10px] font-semibold text-amber-700 hover:text-amber-900 bg-amber-100 hover:bg-amber-200 px-2 py-0.5 rounded shrink-0 transition-colors"
+                        >
+                          Restore
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Progress summary */}
           {allDone ? (
             <span className="text-xs text-green-600 font-semibold flex items-center gap-1">
               <CheckCircle2 className="h-3.5 w-3.5" /> All {questions.length} answered
@@ -343,7 +395,10 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
           {current.isUnlockedSection ? (
             /* Unlocked section — ask if engineer needs this section */
             <div className="flex-1 flex items-center gap-3">
-              <span className="text-sm font-semibold">
+              <span className="text-sm font-semibold flex items-center gap-1.5">
+                <span className="font-mono text-xs bg-primary/10 text-primary px-1.5 py-0.5 rounded shrink-0">
+                  {current.sectionNumber}
+                </span>
                 Do you need the <span className="text-primary">{current.sectionTitle}</span> section?
               </span>
               <Button size="sm" variant="outline" className="h-8 px-3 text-xs border-green-500 text-green-600 hover:bg-green-50"
@@ -361,7 +416,10 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
             </div>
           ) : (
             <>
-              <label className="text-sm font-semibold shrink-0 flex items-center gap-1 min-w-fit">
+              <label className="text-sm font-semibold shrink-0 flex items-center gap-1.5 min-w-fit">
+                <span className="font-mono text-xs bg-muted text-muted-foreground px-1.5 py-0.5 rounded">
+                  {current.sectionNumber}
+                </span>
                 {current.field!.required && (
                   <span className="text-destructive text-xs" title="Required">*</span>
                 )}
@@ -386,6 +444,18 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
                     </ul>
                   )}
                 </div>
+              ) : current.field!.type === "dropdown" ? (
+                /* Dropdown blank — select from admin-defined options */
+                <select
+                  value={value}
+                  onChange={e => onChangeField(current.field!.id, e.target.value)}
+                  className="flex-1 h-9 border border-input rounded-md px-3 text-sm bg-background outline-none focus:border-primary cursor-pointer"
+                >
+                  <option value="">— {current.field!.placeholder || `Select ${current.field!.label.toLowerCase()}`} —</option>
+                  {(current.field!.options ?? []).map((opt, i) => (
+                    <option key={i} value={opt}>{opt}</option>
+                  ))}
+                </select>
               ) : (
                 <input
                   ref={inputRef as React.RefObject<HTMLInputElement>}
@@ -497,20 +567,44 @@ function QuestionnaireBar({ questions, activeIndex, fieldValues, onChangeField, 
 // ─── Inline blank input ───────────────────────────────────────────────────────
 // Short types (text, number, word, sentence, date) render as growing inline inputs.
 // paragraph and list types render as block-level textareas.
-// onFocus bubbles up so clicking a blank in the preview updates the questionnaire bar.
-function BlankInput({ field, value, onChange, onFocus }: {
+// dropdown type renders a <select> populated from field.options.
+// isActive = true when this field is the one currently shown in the questionnaire
+// bar — applies a bold amber ring so the engineer can easily find it on the page.
+function BlankInput({ field, value, onChange, onFocus, isActive = false }: {
   field: TemplateField;
   value: string;
   onChange: (v: string) => void;
   onFocus?: () => void;
+  isActive?: boolean;
 }) {
-  const baseClass = "border-b border-primary/60 bg-primary/5 text-primary rounded px-1 py-0.5 text-sm outline-none focus:border-primary focus:bg-primary/10 transition-colors";
+  // Active state swaps the subtle primary tint for a vivid amber outline so the
+  // blank being edited in the ribbon is immediately obvious in the document preview.
+  const baseClass = isActive
+    ? "border-2 border-amber-400 bg-amber-50 text-amber-900 rounded px-1 py-0.5 text-sm outline-none ring-2 ring-amber-300/60 transition-colors"
+    : "border-b border-primary/60 bg-primary/5 text-primary rounded px-1 py-0.5 text-sm outline-none focus:border-primary focus:bg-primary/10 transition-colors";
 
+  // ── Dropdown ──
+  if (field.type === "dropdown") {
+    return (
+      <select
+        value={value}
+        onChange={e => onChange(e.target.value)}
+        onFocus={onFocus}
+        title={field.label}
+        className={`inline align-baseline ${baseClass} border rounded px-1 cursor-pointer`}
+      >
+        <option value="">— {field.placeholder || field.label} —</option>
+        {(field.options ?? []).map((opt, i) => (
+          <option key={i} value={opt}>{opt}</option>
+        ))}
+      </select>
+    );
+  }
+
+  // ── Paragraph / List ──
   if (field.type === "paragraph" || field.type === "list") {
     return (
       <div className="my-1 w-full block">
-        {/* Bug 2 fix: cap height at 120px with overflow-y scroll so long lists
-            don't push the page to be infinitely tall */}
         <textarea
           value={value}
           onChange={e => onChange(e.target.value)}
@@ -521,7 +615,6 @@ function BlankInput({ field, value, onChange, onFocus }: {
           className={`w-full block ${baseClass} border rounded px-2 py-1 resize-none overflow-y-auto`}
           style={{ maxHeight: "120px" }}
         />
-        {/* For list type show bullet preview below the textarea */}
         {field.type === "list" && value.trim() && (
           <ul className="mt-1 ml-4 space-y-0.5 list-disc text-sm">
             {value.split("\n").filter(l => l.trim()).map((line, i) => (
@@ -533,11 +626,9 @@ function BlankInput({ field, value, onChange, onFocus }: {
     );
   }
 
-  // contenteditable div wraps naturally like real text — no width calculation needed.
-  // Flows inline with surrounding content exactly like a word in a sentence.
+  // ── Inline text / number / date / word / sentence ──
+  // contenteditable div flows inline with surrounding text naturally.
   const ref = useRef<HTMLDivElement>(null);
-
-  // Sync external value into the div only when it differs (avoids cursor jump)
   useEffect(() => {
     if (ref.current && ref.current.innerText !== value) {
       ref.current.innerText = value;
@@ -561,11 +652,14 @@ function BlankInput({ field, value, onChange, onFocus }: {
 // ─── Engineer section content ─────────────────────────────────────────────────
 // Parses {{field_id}} tokens. Locked = static text + fillable BlankInputs.
 // Unlocked = click-to-edit textarea showing raw content with tokens.
-function EngineerSectionContent({ content, fields, fieldValues, locked, onChangeContent, onChangeField, onFocusBlank }: {
+// activeFieldId: the field currently focused in the questionnaire bar — passed
+// down to BlankInput so the matching blank highlights itself on the page.
+function EngineerSectionContent({ content, fields, fieldValues, locked, activeFieldId, onChangeContent, onChangeField, onFocusBlank }: {
   content: string;
   fields: TemplateField[];
   fieldValues: Record<string, string>;
   locked: boolean;
+  activeFieldId?: string;
   onChangeContent: (v: string) => void;
   onChangeField: (fieldId: string, value: string) => void;
   onFocusBlank: (fieldId: string) => void;
@@ -601,6 +695,7 @@ function EngineerSectionContent({ content, fields, fieldValues, locked, onChange
             value={fieldValues[seg.fieldId] ?? field.defaultValue ?? ""}
             onChange={v => onChangeField(seg.fieldId, v)}
             onFocus={() => onFocusBlank(seg.fieldId)}
+            isActive={seg.fieldId === activeFieldId}
           />
         );
       })}
@@ -633,12 +728,14 @@ function EngineerSectionContent({ content, fields, fieldValues, locked, onChange
 // ─── Engineer section block ───────────────────────────────────────────────────
 // Renders one section for the engineer. No hover toolbars, no admin controls.
 // lockEdit controls whether the content text is editable. Tables are editable.
-function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeContent, onChangeField, onFocusBlank, onAddSection, onAddTable, onDeleteSection, onUpdateCell, onDeleteTable, hoveredSectionId, setHoveredSectionId, children }: {
+function EngineerSectionBlock({ section, depth, fields, fieldValues, activeFieldId, onChangeContent, onChangeTitle, onChangeField, onFocusBlank, onAddSection, onAddTable, onDeleteSection, onUpdateCell, onDeleteTable, hoveredSectionId, setHoveredSectionId, children }: {
   section: SectionNode;
   depth: number;
   fields: TemplateField[];
   fieldValues: Record<string, string>;
+  activeFieldId?: string;
   onChangeContent: (sectionId: string, value: string) => void;
+  onChangeTitle: (sectionId: string, title: string) => void;
   onChangeField: (fieldId: string, value: string) => void;
   onFocusBlank: (fieldId: string) => void;
   onAddSection: (parentId: string) => void;
@@ -652,6 +749,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
 }) {
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [showTableForm, setShowTableForm] = useState(false);
+  const [editingTitle, setEditingTitle] = useState(false);
   const [tr, setTr] = useState(3);
   const [tc, setTc] = useState(3);
   const headingClass = depth === 0 ? "text-2xl font-bold" : depth === 1 ? "text-xl font-semibold" : "text-lg font-medium";
@@ -686,7 +784,30 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
           </div>
         )}
         <span className="font-mono text-gray-400 shrink-0 text-sm select-none">{section.number}</span>
-        <span className={headingClass}>{section.title}</span>
+        {section.engineerCreated ? (
+          /* Engineer-created sections: click the title to rename it */
+          editingTitle ? (
+            <input
+              autoFocus
+              value={section.title}
+              onChange={e => onChangeTitle(section.id, e.target.value)}
+              onBlur={() => setEditingTitle(false)}
+              onKeyDown={e => e.key === "Enter" && setEditingTitle(false)}
+              className={`${headingClass} bg-blue-50 border border-blue-300 rounded px-1 outline-none w-full`}
+            />
+          ) : (
+            <span
+              onClick={() => setEditingTitle(true)}
+              title="Click to rename"
+              className={`${headingClass} cursor-text rounded px-1 hover:bg-blue-50/40 hover:outline hover:outline-1 hover:outline-blue-200`}
+            >
+              {section.title}
+            </span>
+          )
+        ) : (
+          /* Admin-defined sections: title is always locked */
+          <span className={headingClass}>{section.title}</span>
+        )}
       </div>
 
       {/* Table size picker */}
@@ -708,6 +829,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
           fields={fields}
           fieldValues={fieldValues}
           locked={section.lockEdit}
+          activeFieldId={activeFieldId}
           onChangeContent={v => onChangeContent(section.id, v)}
           onChangeField={onChangeField}
           onFocusBlank={onFocusBlank}
@@ -741,7 +863,7 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
       )}
       {children}
       {hoveredSectionId === section.id && (
-        <div className="absolute top-0 right-0 bg-white border border-gray-300 rounded shadow-lg p-2 z-10">
+        <div>
           {showDeleteConfirm ? (
             <div className="flex flex-col gap-2">
               <span className="text-sm">Do you need the "{section.title}" section?</span>
@@ -751,11 +873,19 @@ function EngineerSectionBlock({ section, depth, fields, fieldValues, onChangeCon
               </div>
             </div>
           ) : (
-            <div className="flex flex-col gap-1">
-              {!section.lockAddSections && <Button size="sm" onClick={() => onAddSection(section.id)}>Add Subsection</Button>}
-              {!section.lockAddTable && <Button size="sm" onClick={() => setShowTableForm(true)}>Add Table</Button>}
-              {/* {!section.lockDelete && <Button size="sm" variant="destructive" onClick={() => setShowDeleteConfirm(true)}>Delete Section</Button>} */}
-            </div>
+              <div className="flex flex-col gap align-middle absolute top-0 right-0 shadow-lg">
+                {!section.lockAddSections && (
+                    <div className="bg-white border border-gray-300 rounded-t p-2 z-10">
+                      <Button className="w-full" size="sm" onClick={() => onAddSection(section.id)}>Add Subsection</Button>
+                    </div>
+                )}
+                {!section.lockAddTable && (
+                    <div className="bg-white border border-gray-300 rounded-b p-2 z-10 w-full">
+                      <Button className="w-full" size="sm" onClick={() => setShowTableForm(true)}>Add Table</Button>
+                    </div>
+                )}
+                {/* {!section.lockDelete && <Button size="sm" variant="destructive" onClick={() => setShowDeleteConfirm(true)}>Delete Section</Button>} */}
+              </div>
           )}
         </div>
       )}
@@ -770,29 +900,54 @@ function updateSectionContent(sections: SectionNode[], id: string, content: stri
   );
 }
 
+// ─── Section title updater ────────────────────────────────────────────────────
+// Used by engineer-created sections so users can rename their own subsections.
+function updateSectionTitle(sections: SectionNode[], id: string, title: string): SectionNode[] {
+  return sections.map(s =>
+    s.id === id ? { ...s, title } : { ...s, children: updateSectionTitle(s.children, id, title) }
+  );
+}
+
 // ─── Document page wrapper ────────────────────────────────────────────────────
 // Static header and footer — engineers cannot edit these zones.
-function DocumentPage({ hf, pageNumber, children }: {
+function DocumentPage({ hf, pageNumber, fields, fieldValues, onChangeField, onFocusBlank, children }: {
   hf: HeaderFooterData;
   pageNumber: number;
+  fields: TemplateField[];
+  fieldValues: Record<string, string>;
+  onChangeField: (fieldId: string, value: string) => void;
+  onFocusBlank: (fieldId: string) => void;
   children: React.ReactNode;
 }) {
   const resolve = (text: string) => text.replace("{PAGE}", String(pageNumber));
+
+  const renderZone = (content: string) => (
+    <EngineerSectionContent
+      content={resolve(content)}
+      fields={fields}
+      fieldValues={fieldValues}
+      locked={true}
+      onChangeContent={() => {}}
+      onChangeField={onChangeField}
+      onFocusBlank={onFocusBlank}
+    />
+  );
+
   return (
     <div className="bg-white shadow-lg mx-auto text-black" style={{ width: "8.5in", minHeight: "11in", display: "flex", flexDirection: "column" }}>
       <div style={{ padding: "0.5in 1in 0.1in 1in" }}>
         <div className="grid grid-cols-3 gap-1 text-sm text-gray-700">
-          <div className="whitespace-pre-wrap">{hf.headerLeft}</div>
-          <div className="whitespace-pre-wrap text-center">{hf.headerCenter}</div>
-          <div className="whitespace-pre-wrap text-right">{hf.headerRight}</div>
+          <div className="whitespace-pre-wrap">{renderZone(hf.headerLeft)}</div>
+          <div className="whitespace-pre-wrap text-center">{renderZone(hf.headerCenter)}</div>
+          <div className="whitespace-pre-wrap text-right">{renderZone(hf.headerRight)}</div>
         </div>
       </div>
       <div style={{ padding: "0.1in 1in", flex: 1 }}>{children}</div>
       <div style={{ padding: "0.1in 1in 0.5in 1in" }}>
         <div className="grid grid-cols-3 gap-1 text-sm text-gray-700">
-          <div className="whitespace-pre-wrap">{resolve(hf.footerLeft)}</div>
-          <div className="whitespace-pre-wrap text-center">{resolve(hf.footerCenter)}</div>
-          <div className="whitespace-pre-wrap text-right">{resolve(hf.footerRight)}</div>
+          <div className="whitespace-pre-wrap">{renderZone(hf.footerLeft)}</div>
+          <div className="whitespace-pre-wrap text-center">{renderZone(hf.footerCenter)}</div>
+          <div className="whitespace-pre-wrap text-right">{renderZone(hf.footerRight)}</div>
         </div>
       </div>
     </div>
@@ -804,6 +959,7 @@ function generateTOCEntries(sections: SectionNode[], depth = 0, startPage = 3) {
   const entries: Array<{ number: string; title: string; page: number; depth: number }> = [];
   let page = startPage;
   for (const s of sections) {
+    if (s.deleted) continue; // soft-deleted sections don't appear in TOC
     entries.push({ number: s.number, title: s.title, page, depth });
     page++;
     if (s.children.length > 0) {
@@ -815,20 +971,60 @@ function generateTOCEntries(sections: SectionNode[], depth = 0, startPage = 3) {
   return { entries, nextPage: page };
 }
 
+// ─── Restore helpers ─────────────────────────────────────────────────────────
+// Collects every soft-deleted section in the tree (flat list, depth-first).
+// Used to populate the Removed Sections restore panel in the nav.
+function collectDeletedSections(sections: SectionNode[]): SectionNode[] {
+  const result: SectionNode[] = [];
+  for (const s of sections) {
+    if (s.deleted) result.push(s);
+    // Still recurse into children of deleted parents so nested removes surface
+    result.push(...collectDeletedSections(s.children));
+  }
+  return result;
+}
+
 // ─── Main inner component ─────────────────────────────────────────────────────
 function SowEngineerPageInner() {
   const searchParams = useSearchParams();
+  const inputs = searchParams.get("draft");
 
   // Load template from ?draft= URL param (base64 encoded TemplateData).
   // Falls back to default blank template. When DB is live this should
   // load from a template ID in the URL instead.
   const initialData: TemplateData = useMemo(() => {
+    if (inputs){
+      // Pull Form Information from String
+      const information = JSON.parse(atob(inputs));
+
+
+      // Prepare Inputs to Document
+      // Map Inputs from Initial Form to Fields in the Template for the User
+      DEFAULT_TEMPLATE.documentName = information.documentName;
+      DEFAULT_TEMPLATE.fields = DEFAULT_TEMPLATE.fields.map(field => {
+        const value = information.fieldValues[field.id];
+        if (value){
+          const v = Array.isArray(value) ? value[0] : value;
+
+          return {
+            ...field,
+            defaultValue: v ?? " "
+          }
+        }
+        return {...field}
+      })
+
+      return DEFAULT_TEMPLATE;
+    }
+
+
     return DEFAULT_TEMPLATE;
-    
+
   }, []);
 
   // Template structure - engineers cannot change this, only their content edits and field values
   const [data, setData] = useState<TemplateData>(initialData);// Navigator expand/collapse state
+  console.log(data)
   const [expandedIds, setExpandedIds] = useState<Set<string>>(
     new Set(initialData.sections.map(s => s.id))
   );
@@ -844,22 +1040,49 @@ function SowEngineerPageInner() {
         
         // Only update if we actually got a valid object back
         if (dbData) {
-          setData(dbData as TemplateData);
+          // If the DB data still has an old coverPage, we need to migrate it to fields
+          const migratedDbData = { ...(dbData as TemplateData) };
+          if (migratedDbData.coverPage) {
+            // Add default cover fields if they don't exist
+            const coverFields: TemplateField[] = [
+              { id: "field_cover_title", label: "SOW Title", type: "text", defaultValue: migratedDbData.coverPage.title || "Statement of Work", required: true },
+              { id: "field_project_number", label: "Project Number", type: "text", defaultValue: migratedDbData.coverPage.projectNumber || "SOW-2026-001", required: true },
+              { id: "field_cover_client_name", label: "Client Name", type: "text", defaultValue: migratedDbData.coverPage.clientName || "", required: false },
+              { id: "field_cover_building", label: "Building", type: "text", defaultValue: migratedDbData.coverPage.building || "", required: false },
+              { id: "field_cover_location", label: "Location", type: "text", defaultValue: migratedDbData.coverPage.location || "", required: false },
+              { id: "field_cover_prepared_by", label: "Prepared By", type: "text", defaultValue: migratedDbData.coverPage.preparedBy || "", required: false },
+              { id: "field_cover_department", label: "Department", type: "text", defaultValue: migratedDbData.coverPage.department || "", required: false },
+              { id: "field_cover_date", label: "Date", type: "date", defaultValue: migratedDbData.coverPage.date || new Date().toISOString().split("T")[0], required: false },
+              { id: "field_cover_confidentiality", label: "Confidentiality", type: "text", defaultValue: migratedDbData.coverPage.confidentiality || "Confidential", required: false },
+              { id: "field_cover_description", label: "Description", type: "paragraph", defaultValue: "", required: false },
+            ];
+            migratedDbData.fields = [...coverFields, ...migratedDbData.fields.filter(f => !f.id.startsWith("field_cover_") && f.id !== "field_project_number")];
+            if (migratedDbData.headerFooter.footerLeft === migratedDbData.coverPage.projectNumber) {
+              migratedDbData.headerFooter.footerLeft = "{{field_project_number}}";
+            }
+            delete migratedDbData.coverPage;
+          }
+
+          setData(migratedDbData);
 
           if (draftParam) {
             const parsedData = JSON.parse(atob(draftParam));
-            setData((prevData) => ({
-            ...prevData, // Copy all existing data
-            documentName: parsedData.documentName, // Override name
-            coverPage: { 
-              ...prevData.coverPage, // Keep other cover page fields (title, date, version, confidentiality)
-              clientName: parsedData.clientName,
-              building: parsedData.building,
-              location: parsedData.location,
-              preparedBy: parsedData.preparedBy,
-              department: parsedData.department,
-            },
-          }));}
+            setData((prevData) => {
+              const updatedData = { ...prevData };
+              updatedData.documentName = parsedData.documentName;
+
+              if (parsedData.fieldValues) {
+                // We map these over to the default values of fields directly
+                updatedData.fields = updatedData.fields.map(f => {
+                  if (parsedData.fieldValues[f.id] !== undefined) {
+                    return { ...f, defaultValue: parsedData.fieldValues[f.id] };
+                  }
+                  return f;
+                });
+              }
+              return updatedData;
+            });
+          }
           
           // Sync UI states that depend on the data structure
           setExpandedIds(new Set((dbData as TemplateData).sections.map(s => s.id)));
@@ -919,6 +1142,9 @@ function SowEngineerPageInner() {
   // Hovered section ID to manage popup visibility (only deepest hovered section shows popup)
   const [hoveredSectionId, setHoveredSectionId] = useState<string | null>(null);
 
+  // Controls visibility of the "Removed Sections" restore panel in the left nav
+  // (moved to QuestionnaireBar — kept as dead code placeholder, can be removed)
+
   // Ordered list of questions derived from the section tree and fields array.
   // Recomputed whenever data changes (e.g. after loading a new draft).
   const questions = useMemo(() => buildQuestionList(data.sections, data.fields), [data.sections, data.fields]);
@@ -937,25 +1163,6 @@ function SowEngineerPageInner() {
 
   function toggleExpand(id: string) {
     setExpandedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
-  }
-
-  // Saves a draft by merging field values back into the template fields
-  // and downloading the result as a JSON file the engineer can reload later.
-  function handleSave() {
-    const merged: TemplateData = {
-      ...data,
-      fields: data.fields.map(f => ({
-        ...f,
-        defaultValue: fieldValues[f.id] ?? f.defaultValue,
-      })),
-    };
-    const blob = new Blob([JSON.stringify(merged, null, 2)], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `${data.documentName.replace(/\s+/g, "-").toLowerCase()}-draft-${new Date().toISOString().split("T")[0]}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
   }
 
   // Exports the completed SOW as a Word document via the FastAPI docx service.
@@ -995,35 +1202,14 @@ function SowEngineerPageInner() {
     }
   }
 
-  // Loads a previously saved draft JSON file
-  function handleLoad() {
-    const input = document.createElement("input");
-    input.type = "file";
-    input.accept = ".json";
-    input.onchange = (e: Event) => {
-      const file = (e.target as HTMLInputElement).files?.[0];
-      if (!file) return;
-      const reader = new FileReader();
-      reader.onload = ev => {
-        try {
-          const loaded = JSON.parse(ev.target?.result as string) as TemplateData;
-          setData(loaded);
-          const values: Record<string, string> = {};
-          loaded.fields.forEach(f => { if (f.defaultValue) values[f.id] = f.defaultValue; });
-          setFieldValues(values);
-          setExpandedIds(new Set(loaded.sections.map(s => s.id)));
-        } catch {
-          alert("Invalid draft file.");
-        }
-      };
-      reader.readAsText(file);
-    };
-    input.click();
-  }
-
   // Updates an unlocked section's content text
   function handleChangeContent(sectionId: string, value: string) {
     setData(p => ({ ...p, sections: updateSectionContent(p.sections, sectionId, value) }));
+  }
+
+  // Updates the title of an engineer-created section
+  function handleChangeTitle(sectionId: string, title: string) {
+    setData(p => ({ ...p, sections: updateSectionTitle(p.sections, sectionId, title) }));
   }
 
   // Updates a single field value the engineer typed into a blank
@@ -1031,24 +1217,50 @@ function SowEngineerPageInner() {
     setFieldValues(prev => ({ ...prev, [fieldId]: value }));
   }
 
-  // Deletes a section and all its children from the document.
-  // Only reachable when lockDelete is false on that section — the questionnaire
-  // bar shows the Not Needed button only when the admin has permitted deletion.
+  // Soft-deletes a section — marks it deleted:true so it disappears from the
+  // document and questionnaire, but stays in the data tree and can be restored.
+  // Hard deletion is intentionally avoided so engineers can undo mistakes.
   function handleDeleteSection(sectionId: string) {
-    function removeSectionById(sections: SectionNode[]): SectionNode[] {
-      return sections
-        .filter(s => s.id !== sectionId)
-        .map(s => ({ ...s, children: removeSectionById(s.children) }));
+    function markDeleted(sections: SectionNode[]): SectionNode[] {
+      return sections.map(s =>
+        s.id === sectionId
+          ? { ...s, deleted: true }
+          : { ...s, children: markDeleted(s.children) }
+      );
     }
-    function renumber(sections: SectionNode[], prefix = ""): SectionNode[] {
-      return sections.map((s, i) => {
-        const number = prefix ? `${prefix}.${i + 1}` : `${i + 1}.0`;
-        return { ...s, number, children: renumber(s.children, number.replace(/\.0$/, "")) };
+    // Renumber only the visible (non-deleted) sections so numbering stays clean
+    function renumberVisible(sections: SectionNode[], prefix = ""): SectionNode[] {
+      let activeCount = 0;
+      return sections.map(s => {
+        if (s.deleted) return { ...s, children: renumberVisible(s.children, s.number?.replace(/\.0$/, "") || "") };
+        activeCount++;
+        const number = prefix ? `${prefix}.${activeCount}` : `${activeCount}.0`;
+        return { ...s, number, children: renumberVisible(s.children, number.replace(/\.0$/, "")) };
       });
     }
-    setData(p => ({ ...p, sections: renumber(removeSectionById(p.sections)) }));
-    // Move to previous question if we deleted the last one
+    setData(p => ({ ...p, sections: renumberVisible(markDeleted(p.sections)) }));
     setActiveQuestionIndex(prev => Math.max(0, prev - 1));
+  }
+
+  // Restores a soft-deleted section by clearing its deleted flag, then renumbers.
+  function handleRestoreSection(sectionId: string) {
+    function markRestored(sections: SectionNode[]): SectionNode[] {
+      return sections.map(s =>
+        s.id === sectionId
+          ? { ...s, deleted: false }
+          : { ...s, children: markRestored(s.children) }
+      );
+    }
+    function renumberVisible(sections: SectionNode[], prefix = ""): SectionNode[] {
+      let activeCount = 0;
+      return sections.map(s => {
+        if (s.deleted) return { ...s, children: renumberVisible(s.children, s.number?.replace(/\.0$/, "") || "") };
+        activeCount++;
+        const number = prefix ? `${prefix}.${activeCount}` : `${activeCount}.0`;
+        return { ...s, number, children: renumberVisible(s.children, number.replace(/\.0$/, "")) };
+      });
+    }
+    setData(p => ({ ...p, sections: renumberVisible(markRestored(p.sections)) }));
   }
 
   // Adds a new subsection to the specified parent section.
@@ -1068,6 +1280,7 @@ function SowEngineerPageInner() {
             lockDelete: false,
             lockAddSections: false,
             lockAddTable: false,
+            engineerCreated: true, // engineer-created: never show "do you need this?" in questionnaire
             tables: [],
             children: []
           };
@@ -1084,7 +1297,7 @@ function SowEngineerPageInner() {
   function handleAddTable(sectionId: string, rows: number, cols: number) {
     function addTable(sections: SectionNode[], sectionId: string, rows: number, cols: number): SectionNode[] {
       return sections.map(s =>
-        s.id === sectionId ? { ...s, tables: [...s.tables, { id: `table-${Date.now()}`, rows, cols, data: Array.from({length: rows}, () => Array(cols).fill("")) }] } : { ...s, children: addTable(s.children, sectionId, rows, cols) }
+        s.id === sectionId ? { ...s, tables: [...(s.tables ?? []), { id: `table-${Date.now()}`, rows, cols, data: Array.from({length: rows}, () => Array(cols).fill("")) }] } : { ...s, children: addTable(s.children, sectionId, rows, cols) }
       );
     }
     setData(p => ({ ...p, sections: addTable(p.sections, sectionId, rows, cols) }));
@@ -1095,7 +1308,7 @@ function SowEngineerPageInner() {
     function deleteTable(sections: SectionNode[], tableId: string): SectionNode[] {
       return sections.map(s => ({
         ...s,
-        tables: s.tables.filter(t => t.id !== tableId),
+        tables: (s.tables ?? []).filter(t => t.id !== tableId),
         children: deleteTable(s.children, tableId)
       }));
     }
@@ -1107,7 +1320,7 @@ function SowEngineerPageInner() {
     function updateCell(sections: SectionNode[], tableId: string, row: number, col: number, value: string): SectionNode[] {
       return sections.map(s => ({
         ...s,
-        tables: s.tables.map(t => t.id === tableId ? {
+        tables: (s.tables ?? []).map(t => t.id === tableId ? {
           ...t,
           data: t.data.map((r, ri) => ri === row ? r.map((c, ci) => ci === col ? value : c) : r)
         } : t),
@@ -1126,14 +1339,21 @@ function SowEngineerPageInner() {
 
   // Recursively renders sections for the document page
   function renderSections(sections: SectionNode[], depth = 0): React.ReactNode {
-    return sections.map(section => (
+    // The field ID currently shown in the questionnaire bar — used to highlight
+    // the matching blank in the document preview so engineers can find it easily.
+    const activeFieldId = questions[activeQuestionIndex]?.field?.id;
+    return sections
+      .filter(section => !section.deleted) // soft-deleted sections are hidden
+      .map(section => (
       <EngineerSectionBlock
         key={section.id}
         section={section}
         depth={depth}
         fields={data.fields}
         fieldValues={fieldValues}
+        activeFieldId={activeFieldId}
         onChangeContent={handleChangeContent}
+        onChangeTitle={handleChangeTitle}
         onChangeField={handleChangeField}
         onFocusBlank={handleFocusBlank}
         onAddSection={handleAddSection}
@@ -1151,8 +1371,10 @@ function SowEngineerPageInner() {
 
   // Renders the left navigator panel — click to scroll, expand/collapse
   function renderNav(sections: SectionNode[], depth = 0): React.ReactNode {
-    return sections.map(section => {
-      const hasChildren = section.children.length > 0;
+    return sections
+      .filter(section => !section.deleted) // soft-deleted sections are hidden from nav
+      .map(section => {
+      const hasChildren = section.children.filter(c => !c.deleted).length > 0;
       const isExpanded = expandedIds.has(section.id);
       //if section is unlocked AT ALL, then the lock is removed
       const isUnlocked = !(section.lockEdit && section.lockDelete && section.lockAddSections && section.lockAddTable)
@@ -1182,6 +1404,8 @@ function SowEngineerPageInner() {
   }
 
   const tocData = generateTOCEntries(data.sections);
+  // Flat list of all soft-deleted sections — drives the restore panel badge + list
+  const deletedSections = useMemo(() => collectDeletedSections(data.sections), [data.sections]);
 
   return (
     <div className="flex flex-col h-screen overflow-hidden">
@@ -1205,12 +1429,6 @@ function SowEngineerPageInner() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={handleLoad}>
-            <Download className="h-4 w-4 mr-1" /> Load Draft
-          </Button>
-          <Button variant="outline" size="sm" onClick={handleSave}>
-            <Save className="h-4 w-4 mr-1" /> Save Draft
-          </Button>
           <Button size="sm" onClick={handleExport} disabled={exporting}>
             <FileDown className="h-4 w-4 mr-1" />
             {exporting ? "Exporting..." : "Export Word"}
@@ -1247,6 +1465,8 @@ function SowEngineerPageInner() {
               onChangeField={handleChangeField}
               onChangeIndex={handleChangeQuestionIndex}
               onDeleteSection={handleDeleteSection}
+              deletedSections={deletedSections}
+              onRestoreSection={handleRestoreSection}
             />
           )}
 
@@ -1259,26 +1479,40 @@ function SowEngineerPageInner() {
                 <div className="absolute inset-8 border-4 border-black pointer-events-none" />
                 <div className="absolute inset-8 flex items-center justify-center">
                   <div className="text-center w-full px-12">
-                    <p className="text-4xl font-bold">{data.coverPage.title}</p>
+                    <div className="text-4xl font-bold">
+                      <EngineerSectionContent content="{{field_cover_title}}" fields={data.fields} fieldValues={fieldValues} locked={true} onChangeContent={() => {}} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank} />
+                    </div>
                     <p className="text-3xl font-semibold mt-6">FOR</p>
-                    <p className="text-4xl font-bold mt-4">{data.coverPage.clientName || "—"}</p>
+                    <div className="text-4xl font-bold mt-4">
+                      <EngineerSectionContent content="{{field_cover_client_name}}" fields={data.fields} fieldValues={fieldValues} locked={true} onChangeContent={() => {}} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank} />
+                    </div>
                     <div className="flex items-baseline justify-center gap-2 mt-4">
                       <span className="text-3xl font-semibold">BUILDING</span>
-                      <span className="text-3xl font-semibold">{data.coverPage.building || "—"}</span>
+                      <div className="text-3xl font-semibold">
+                        <EngineerSectionContent content="{{field_cover_building}}" fields={data.fields} fieldValues={fieldValues} locked={true} onChangeContent={() => {}} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank} />
+                      </div>
                     </div>
                     <div className="mt-16 space-y-3">
-                      <p className="text-xl">{data.coverPage.location || "—"}</p>
+                      <div className="text-xl">
+                        <EngineerSectionContent content="{{field_cover_location}}" fields={data.fields} fieldValues={fieldValues} locked={true} onChangeContent={() => {}} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank} />
+                      </div>
                       <p className="text-lg font-semibold mt-4">Prepared by</p>
-                      <p className="text-xl">{data.coverPage.preparedBy || "—"}</p>
-                      <p className="text-xl">{data.coverPage.department || "—"}</p>
-                      <p className="text-xl mt-2">{data.coverPage.date}</p>
+                      <div className="text-xl">
+                        <EngineerSectionContent content="{{field_cover_prepared_by}}" fields={data.fields} fieldValues={fieldValues} locked={true} onChangeContent={() => {}} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank} />
+                      </div>
+                      <div className="text-xl">
+                        <EngineerSectionContent content="{{field_cover_department}}" fields={data.fields} fieldValues={fieldValues} locked={true} onChangeContent={() => {}} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank} />
+                      </div>
+                      <div className="text-xl mt-2">
+                        <EngineerSectionContent content="{{field_cover_date}}" fields={data.fields} fieldValues={fieldValues} locked={true} onChangeContent={() => {}} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank} />
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
               {/* Table of Contents */}
-              <DocumentPage hf={data.headerFooter} pageNumber={2}>
+              <DocumentPage hf={data.headerFooter} pageNumber={2} fields={data.fields} fieldValues={fieldValues} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank}>
                 <h2 className="font-bold text-lg mb-6 text-center">Table of Contents</h2>
                 <div className="space-y-0.5">
                   {tocData.entries.map((entry, i) => (
@@ -1295,7 +1529,7 @@ function SowEngineerPageInner() {
               </DocumentPage>
 
               {/* Section content */}
-              <DocumentPage hf={data.headerFooter} pageNumber={3}>
+              <DocumentPage hf={data.headerFooter} pageNumber={3} fields={data.fields} fieldValues={fieldValues} onChangeField={handleChangeField} onFocusBlank={handleFocusBlank}>
                 {data.sections.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-64 text-center gap-2">
                     <p className="text-sm text-muted-foreground">No sections loaded.</p>
